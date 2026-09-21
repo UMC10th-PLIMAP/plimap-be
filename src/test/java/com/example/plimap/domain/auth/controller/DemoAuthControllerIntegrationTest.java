@@ -1,6 +1,7 @@
 package com.example.plimap.domain.auth.controller;
 
 import com.example.plimap.domain.auth.config.DemoAuthProperties;
+import com.example.plimap.domain.auth.entity.AuthMember;
 import com.example.plimap.domain.member.entity.Member;
 import com.example.plimap.domain.member.enums.MemberRole;
 import com.example.plimap.domain.member.enums.MemberStatus;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -184,6 +186,63 @@ class DemoAuthControllerIntegrationTest {
 
         // when, then
         assertRejected(503, "AUTH_DEMO_LOGIN_UNAVAILABLE");
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void 데모_계정은_기능_활성화와_관계없이_쿠키로_탈퇴할_수_없다(boolean enabled) throws Exception {
+        // given
+        Cookie access = loginDemo().getResponse().getCookie("accessToken");
+        when(properties.enabled()).thenReturn(enabled);
+
+        // when, then
+        mockMvc.perform(delete("/api/v1/members/me")
+                        .cookie(access, csrfCookie).header("X-XSRF-TOKEN", csrfToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.isSuccess").value(false))
+                .andExpect(jsonPath("$.code").value("AUTH_DEMO_ACCOUNT_WITHDRAWAL_NOT_ALLOWED"));
+        assertThat(demo.getStatus()).isEqualTo(MemberStatus.ACTIVE);
+        assertThat(demo.getDeletedAt()).isNull();
+        mockMvc.perform(get("/api/v1/members/me").cookie(access)).andExpect(status().isOk());
+    }
+
+    @Test
+    void 데모_계정은_Bearer_인증으로도_탈퇴할_수_없다() throws Exception {
+        // given
+        Cookie access = loginDemo().getResponse().getCookie("accessToken");
+
+        // when, then
+        mockMvc.perform(delete("/api/v1/members/me")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + access.getValue()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH_DEMO_ACCOUNT_WITHDRAWAL_NOT_ALLOWED"));
+        assertThat(demo.getStatus()).isEqualTo(MemberStatus.ACTIVE);
+    }
+
+    @Test
+    void 일반_계정은_기존처럼_탈퇴할_수_있다() throws Exception {
+        // given
+        Member regular = Member.create(null, MemberRole.USER);
+        regular.completeOnboarding("일반회원");
+        regular = memberRepository.saveAndFlush(regular);
+        String access = jwtUtil.createAccessToken(new AuthMember(regular));
+
+        // when
+        mockMvc.perform(delete("/api/v1/members/me")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + access))
+                .andExpect(status().isOk());
+
+        // then
+        assertThat(regular.getStatus()).isEqualTo(MemberStatus.WITHDRAWN);
+        assertThat(demo.getStatus()).isEqualTo(MemberStatus.ACTIVE);
+    }
+
+    @Test
+    void 익명_탈퇴_요청은_기존처럼_인증이_필요하다() throws Exception {
+        // given, when, then
+        mockMvc.perform(delete("/api/v1/members/me")
+                        .cookie(csrfCookie).header("X-XSRF-TOKEN", csrfToken))
+                .andExpect(status().isUnauthorized());
     }
 
     private MvcResult loginDemo() throws Exception {

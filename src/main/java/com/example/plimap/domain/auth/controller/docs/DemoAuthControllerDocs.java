@@ -24,7 +24,7 @@ public interface DemoAuthControllerDocs {
             성공 시 24시간 accessToken HttpOnly 쿠키를 설정하며 기존 refreshToken 쿠키는 삭제합니다.
             리프레시 토큰은 발급하지 않습니다. 이후 GET /api/v1/members/me로 로그인 상태를 확인하세요.
             로그인 상태 확인 후 GET /api/v1/auth/csrf를 다시 호출하고, 갱신된 토큰으로 로그아웃 등 상태 변경 요청을 보내세요.
-            만료되면 이 API를 다시 호출합니다. 계정의 데이터와 일반 회원 기능을 함께 사용합니다.
+            만료되면 이 API를 다시 호출합니다. 계정의 데이터와 일반 회원 기능을 함께 사용합니다. 단, 공용 계정의 회원 탈퇴는 403 (AUTH_DEMO_ACCOUNT_WITHDRAWAL_NOT_ALLOWED)으로 차단합니다.
             """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
