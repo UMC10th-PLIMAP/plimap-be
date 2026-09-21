@@ -23,7 +23,7 @@ import tools.jackson.core.JacksonException;
 
 class RedisTrackSearchCacheRepositoryTest {
 
-    private static final String KEY = "track:search:taylor swift:20";
+    private static final String KEY = "track:search:v3:taylor swift:20";
 
     private final StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
     private final ValueOperations<String, String> valueOperations = mock(ValueOperations.class);

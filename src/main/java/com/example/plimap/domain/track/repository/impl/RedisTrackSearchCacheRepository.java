@@ -16,7 +16,7 @@ import tools.jackson.core.JacksonException;
 public class RedisTrackSearchCacheRepository implements TrackSearchCacheRepository {
 
     static final Duration TTL = Duration.ofHours(24);
-    private static final String KEY_PREFIX = "track:search:";
+    private static final String KEY_PREFIX = "track:search:v3:";
 
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;

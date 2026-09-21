@@ -21,9 +21,9 @@ import org.springframework.test.context.ActiveProfiles;
 @Import({PostgisContainerConfiguration.class, RedisContainerConfiguration.class})
 class RedisTrackSearchCacheRepositoryIntegrationTest {
 
-    private static final String TAYLOR_KEY = "track:search:taylor swift:20";
-    private static final String IU_KEY = "track:search:아이유:20";
-    private static final String IU_LIMIT_KEY = "track:search:아이유:50";
+    private static final String TAYLOR_KEY = "track:search:v3:taylor swift:20";
+    private static final String IU_KEY = "track:search:v3:아이유:20";
+    private static final String IU_LIMIT_KEY = "track:search:v3:아이유:50";
 
     @Autowired
     private TrackSearchCacheRepository trackSearchCacheRepository;

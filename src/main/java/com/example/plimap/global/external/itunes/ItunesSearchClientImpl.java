@@ -19,7 +19,7 @@ public class ItunesSearchClientImpl implements ItunesSearchClient {
             ItunesSearchResponse response = itunesRestClient.get()
                     .uri(uriBuilder -> uriBuilder
                             .path("/search")
-                            .queryParam("country", "KR")
+                            .queryParam("country", "US")
                             .queryParam("media", "music")
                             .queryParam("entity", "song")
                             .queryParam("limit", limit)

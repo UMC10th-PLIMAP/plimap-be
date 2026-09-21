@@ -40,7 +40,7 @@ class ItunesSearchClientImplTest {
                             .build()
                             .getQueryParams();
                     assertThat(request.getURI().getPath()).isEqualTo("/search");
-                    assertThat(parameters.getFirst("country")).isEqualTo("KR");
+                    assertThat(parameters.getFirst("country")).isEqualTo("US");
                     assertThat(parameters.getFirst("media")).isEqualTo("music");
                     assertThat(parameters.getFirst("entity")).isEqualTo("song");
                     assertThat(parameters.getFirst("limit")).isEqualTo("20");
