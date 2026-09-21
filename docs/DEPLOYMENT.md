@@ -372,7 +372,8 @@ dev 배포 스크립트는 Cloud Run 원본에서 health endpoint의 `200`과 Sw
 2. Auth의 `GET /api/v1/auth/csrf`를 실행해 CSRF 쿠키를 받습니다.
 3. `POST /api/v1/auth/demo`를 본문 없이 실행합니다. Swagger의 CSRF 연동이 `XSRF-TOKEN` 쿠키를 `X-XSRF-TOKEN` 헤더로 전달합니다.
 4. 200 `AUTH_DEMO_LOGIN_SUCCESS`와 `accessToken` 쿠키를 확인한 뒤 `GET /api/v1/members/me`에서 지정한 계정을 확인합니다. 쿠키 유효기간은 86400초이며 refreshToken은 없어야 합니다.
-5. 일반 회원 API를 호출하고 `DELETE /api/v1/auth/logout` 이후 2~4를 다시 실행합니다. PIN 등록에는 기존 위치·장소별 PIN 제약이 적용됩니다.
+5. 로그인 상태 확인 후 `GET /api/v1/auth/csrf`를 다시 실행합니다. 로그인 전 토큰을 계속 쓰지 말고, 현재 인증 상태의 토큰으로 로그아웃 등 상태 변경 요청을 보냅니다. Swagger가 현재 CSRF 쿠키를 헤더에 자동 반영합니다.
+6. 일반 회원 API와 `DELETE /api/v1/auth/logout`을 호출합니다. 로그아웃 후 `/members/me`가 401인지 확인하고, 2~5를 다시 실행해 재접속합니다. PIN 등록에는 기존 위치·장소별 PIN 제약이 적용됩니다.
 
 Prod에는 Swagger를 공개하지 않습니다. 배포 후 `https://plimap.kr`의 동일 API와 프론트 연결로 확인합니다.
 
@@ -392,6 +393,10 @@ const login = await fetch('/api/v1/auth/demo', {
 if (!login.ok) throw new Error('테스트 계정 접속 실패');
 const me = await fetch('/api/v1/members/me', { credentials: 'include' });
 if (!me.ok) throw new Error('회원 정보 조회 실패');
+const authenticatedCsrf = await fetch('/api/v1/auth/csrf', { credentials: 'include' });
+if (!authenticatedCsrf.ok) throw new Error('로그인 후 CSRF 토큰 갱신 실패');
+const { result: currentCsrf } = await authenticatedCsrf.json();
+// currentCsrf.token으로 공통 API 클라이언트의 X-XSRF-TOKEN 값을 갱신합니다.
 // 기존 로그인 상태에 회원 정보를 저장하고 메인 화면으로 이동합니다.
 ```
 
