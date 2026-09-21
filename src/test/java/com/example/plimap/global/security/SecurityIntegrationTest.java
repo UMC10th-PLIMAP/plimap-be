@@ -1,6 +1,9 @@
 package com.example.plimap.global.security;
 
 import com.example.plimap.domain.auth.controller.AuthController;
+import com.example.plimap.domain.auth.controller.DemoAuthController;
+import com.example.plimap.domain.auth.service.command.DemoAuthCommandService;
+import java.time.Duration;
 import com.example.plimap.domain.auth.service.command.impl.CustomOAuthService;
 import com.example.plimap.domain.auth.service.command.impl.OAuthFailureHandler;
 import com.example.plimap.domain.auth.service.command.impl.OAuthSuccessHandler;
@@ -51,7 +54,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(controllers = {
         SecurityIntegrationTest.TestController.class,
         SecurityIntegrationTest.AdminTestController.class,
-        AuthController.class
+        AuthController.class,
+        DemoAuthController.class
 })
 @Import({
         SecurityConfig.class,
@@ -110,6 +114,9 @@ class SecurityIntegrationTest {
     @MockitoBean
     private SessionInvalidationService sessionInvalidationService;
 
+    @MockitoBean
+    private DemoAuthCommandService demoAuthCommandService;
+
     @BeforeEach
     void setUp() {
         Member member = Member.builder().build();
@@ -119,6 +126,38 @@ class SecurityIntegrationTest {
         when(jwtUtil.getJti(ACCESS_TOKEN)).thenReturn("test-jti");
         when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
         when(tokenBlacklistService.isBlacklisted("test-jti")).thenReturn(false);
+    }
+
+    @Test
+    void 데모_로그인은_CSRF_확인_후_익명_요청에_인증_쿠키를_발급한다() throws Exception {
+        // given
+        when(demoAuthCommandService.issueAccessToken()).thenReturn(ACCESS_TOKEN);
+        when(jwtUtil.getAccessTokenExpiry()).thenReturn(Duration.ofDays(1));
+        MvcResult csrf = mockMvc.perform(get("/api/v1/auth/csrf"))
+                .andExpect(status().isOk()).andReturn();
+        Cookie csrfCookie = csrf.getResponse().getCookie("XSRF-TOKEN");
+
+        // when
+        MvcResult login = mockMvc.perform(post("/api/v1/auth/demo")
+                        .cookie(csrfCookie)
+                        .header("X-XSRF-TOKEN", csrfCookie.getValue()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("AUTH_DEMO_LOGIN_SUCCESS"))
+                .andReturn();
+
+        // then
+        assertThat(login.getResponse().getHeaders(HttpHeaders.SET_COOKIE))
+                .anySatisfy(value -> assertThat(value).startsWith("accessToken=")
+                        .contains("HttpOnly", "Path=/", "Max-Age=86400", "SameSite=Lax"))
+                .anySatisfy(value -> assertThat(value).startsWith("refreshToken=;").contains("Max-Age=0"));
+        org.mockito.Mockito.verifyNoInteractions(refreshTokenService);
+    }
+
+    @Test
+    void 데모_로그인도_CSRF_헤더_없이_호출하면_거부한다() throws Exception {
+        // given, when, then
+        mockMvc.perform(post("/api/v1/auth/demo")).andExpect(status().isForbidden());
+        org.mockito.Mockito.verifyNoInteractions(demoAuthCommandService);
     }
 
     @Test

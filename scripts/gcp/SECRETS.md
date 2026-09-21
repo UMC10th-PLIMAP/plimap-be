@@ -123,6 +123,15 @@ Kakao와 Google에는 dev 전용 OAuth client를 사용합니다. 각 Provider C
 
 `https://admin.plimap.kr`은 Prod 데이터를 관리하는 전용 프론트 Origin이므로 두 allowlist에서 제거할 수 없습니다. 배포 스크립트는 GitHub Environment Variable에 저장된 추가 Origin을 보존하면서 Prod 공개 Origin과 Admin Origin을 병합하고 중복을 제거합니다.
 
+## 공용 테스트 계정 변수
+
+비밀값이 아닌 회원 ID와 활성화 플래그는 Secret Manager가 아닌 GitHub Actions Variables로 관리합니다.
+Dev는 Repository의 `DEV_AUTH_DEMO_ENABLED` / `DEV_AUTH_DEMO_MEMBER_ID`, Prod는 `production` Environment의
+`PROD_AUTH_DEMO_ENABLED` / `PROD_AUTH_DEMO_MEMBER_ID`를 사용합니다. 기본값은 `false` / `0`이며,
+배포 스크립트가 `AUTH_DEMO_ENABLED` / `AUTH_DEMO_MEMBER_ID`로 전달합니다.
+활성화할 때는 해당 DB에 준비한 ACTIVE / USER 회원 ID가 필요합니다.
+계정 생성과 Swagger/프론트 연결 순서는 [DEPLOYMENT.md](../../docs/DEPLOYMENT.md#공용-테스트-계정으로-로그인-없이-사용해보기)를 따릅니다.
+
 ## Prod Secret Manager 매핑
 
 Prod Secret은 Dev와 별도 ID와 값을 사용합니다. `deploy-prod.ps1`은 다음 Secret의 `latest` 버전 metadata를 조회해 상태가 `ENABLED`인지 확인한 뒤, 그 시점의 숫자 버전을 환경변수에 고정합니다. Secret payload는 읽거나 출력하지 않습니다.

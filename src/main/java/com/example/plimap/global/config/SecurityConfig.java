@@ -103,7 +103,7 @@ public class SecurityConfig {
                                 "/api/v1/auth/csrf"
                         ).permitAll()
                         // 문의 등록은 비로그인 사용자도 이용할 수 있어야 하므로 인증 없이 허용한다.
-                        .requestMatchers(HttpMethod.POST, "/api/v1/inquiries").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/inquiries", "/api/v1/auth/demo").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasAuthority("ADMIN")
                         .anyRequest().authenticated()
                 )

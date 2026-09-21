@@ -40,6 +40,10 @@ final class AuthSwaggerErrorExamples {
                     + "테스트 토큰 발급 인증에 실패했습니다."
                     + JSON_SUFFIX;
 
+    static final String DEMO_LOGIN_UNAVAILABLE =
+            JSON_PREFIX + "AUTH_DEMO_LOGIN_UNAVAILABLE"
+                    + JSON_MESSAGE_SEPARATOR + "지금은 로그인 없이 사용해보기를 이용할 수 없습니다." + JSON_SUFFIX;
+
     private AuthSwaggerErrorExamples() {
     }
 }

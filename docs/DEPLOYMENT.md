@@ -340,6 +340,67 @@ dev 배포 스크립트는 Cloud Run 원본에서 health endpoint의 `200`과 Sw
 - 두 프론트 Origin에서 credential CORS, 인증 GET, CSRF 보호 상태 변경 요청, 재발급과 로그아웃을 E2E 검증합니다.
 - allowlist에 없는 `frontendOrigin`과 CORS Origin이 거부되는지 확인합니다.
 
+
+## 공용 테스트 계정으로 로그인 없이 사용해보기
+
+`POST /api/v1/auth/demo`는 소셜 로그인 없이 미리 준비한 공용 일반 회원으로 접속하는 API입니다.
+요청 본문·회원 ID·발급 키를 받지 않으며 서버의 `AUTH_DEMO_MEMBER_ID`만 사용합니다.
+일반 액세스 토큰과 동일한 24시간 HttpOnly 쿠키를 설정하고 기존 브라우저의 refreshToken 쿠키를 삭제합니다.
+리프레시 토큰을 생성하거나 Redis에 저장하지 않습니다. 데이터와 기존 회원 기능·권한·PIN 제약을 공유합니다.
+
+### 계정 준비 및 환경 설정
+
+1. 각 환경의 DB에서 [prepare-demo-account.sql](../scripts/gcp/prepare-demo-account.sql)을 `ON_ERROR_STOP=1`로 한 번 실행합니다. 동일한 데모 계정이면 재실행해도 추가되지 않으며, 기존 계정과 이름이 충돌하거나 상태가 달라지면 실패합니다.
+2. 이름과 닉네임은 공백을 허용하지 않는 기존 제약에 맞춰 `테스트계정`으로 설정합니다. ACTIVE / USER 및 온보딩 완료만 준비하며 소셜 계정, 약관 동의, PIN, 이미지 등은 생성하지 않습니다.
+3. 실행 결과의 `demo_member_id`를 해당 환경에만 설정합니다. Dev와 Prod의 ID는 서로 다를 수 있습니다.
+4. 아래 GitHub Actions Variables를 설정한 뒤 해당 API 변경을 정상 배포합니다. 기본값은 `false`와 `0`입니다. 배포 스크립트가 환경변수를 전체 교체하므로 Cloud Run 콘솔에만 설정하면 다음 배포에서 사라집니다.
+
+| 환경 | GitHub Variables 위치 | 활성화 | 계정 ID |
+| --- | --- | --- | --- |
+| Dev (Supabase) | Repository variables | `DEV_AUTH_DEMO_ENABLED=true` | `DEV_AUTH_DEMO_MEMBER_ID=<dev 회원 ID>` |
+| Prod (Cloud SQL) | `production` Environment variables | `PROD_AUTH_DEMO_ENABLED=true` | `PROD_AUTH_DEMO_MEMBER_ID=<prod 회원 ID>` |
+
+두 배포 스크립트의 직접 호출에는 `-DemoEnabled true -DemoMemberId <회원 ID>`를 전달합니다.
+애플리케이션에는 `AUTH_DEMO_ENABLED` / `AUTH_DEMO_MEMBER_ID`로 주입됩니다.
+비활성화·ID 미설정·ADMIN 계정이면 503 `AUTH_DEMO_LOGIN_UNAVAILABLE`,
+미존재·정지·탈퇴·삭제 회원이면 404 `MEMBER_NOT_FOUND`를 반환하며 쿠키를 발급하지 않습니다.
+기능 비활성화는 신규 발급을 막습니다. 이미 발급된 액세스 토큰은 만료·로그아웃 또는 기존 회원 상태 제한까지 유효합니다.
+
+### Dev Swagger 확인 순서
+
+1. 시크릿 창에서 `https://dev.plimap.kr/swagger-ui/index.html`을 엽니다. Bearer Authorize는 비워 둡니다.
+2. Auth의 `GET /api/v1/auth/csrf`를 실행해 CSRF 쿠키를 받습니다.
+3. `POST /api/v1/auth/demo`를 본문 없이 실행합니다. Swagger의 CSRF 연동이 `XSRF-TOKEN` 쿠키를 `X-XSRF-TOKEN` 헤더로 전달합니다.
+4. 200 `AUTH_DEMO_LOGIN_SUCCESS`와 `accessToken` 쿠키를 확인한 뒤 `GET /api/v1/members/me`에서 지정한 계정을 확인합니다. 쿠키 유효기간은 86400초이며 refreshToken은 없어야 합니다.
+5. 일반 회원 API를 호출하고 `DELETE /api/v1/auth/logout` 이후 2~4를 다시 실행합니다. PIN 등록에는 기존 위치·장소별 PIN 제약이 적용됩니다.
+
+Prod에는 Swagger를 공개하지 않습니다. 배포 후 `https://plimap.kr`의 동일 API와 프론트 연결로 확인합니다.
+
+### 프론트 전달 사항
+
+밑줄 버튼 **로그인 없이 사용해보기**에서 같은 API origin에 다음 순서로 요청합니다.
+
+```javascript
+const csrf = await fetch('/api/v1/auth/csrf', { credentials: 'include' });
+if (!csrf.ok) throw new Error('CSRF 토큰 발급 실패');
+const { result } = await csrf.json();
+const login = await fetch('/api/v1/auth/demo', {
+  method: 'POST',
+  credentials: 'include',
+  headers: { 'X-XSRF-TOKEN': result.token },
+});
+if (!login.ok) throw new Error('테스트 계정 접속 실패');
+const me = await fetch('/api/v1/members/me', { credentials: 'include' });
+if (!me.ok) throw new Error('회원 정보 조회 실패');
+// 기존 로그인 상태에 회원 정보를 저장하고 메인 화면으로 이동합니다.
+```
+
+토큰은 응답 본문이나 localStorage에 저장하지 않습니다. 데모 진입 여부를 프론트에서 관리하고,
+데모 세션의 401은 refresh 재시도 없이 버튼으로 다시 진입하게 처리합니다.
+이 경로는 회원 가입 절차를 거치지 않습니다. 테스트 계정에는 약관 동의 데이터를 넣지 않으므로
+프론트의 약관/온보딩 라우팅이 데모 메인 진입을 막지 않는지 연결 시 확인해야 합니다.
+일반 소셜 로그인의 refresh 흐름은 그대로 유지합니다.
+
 ## 관련 문서
 
 - 환경변수, Secret Manager 매핑과 값 교체: [SECRETS.md](../scripts/gcp/SECRETS.md)
