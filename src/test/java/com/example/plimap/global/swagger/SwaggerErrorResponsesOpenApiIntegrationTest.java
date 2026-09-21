@@ -92,6 +92,19 @@ class SwaggerErrorResponsesOpenApiIntegrationTest {
         }
     }
 
+    @Test
+    void 데모_로그인은_회원_ID나_Bearer_인증_입력_없이_문서화한다() throws Exception {
+        // given, when
+        JsonNode operation = fetchOpenApi().path("paths").path("/api/v1/auth/demo").path("post");
+
+        // then
+        assertThat(operation.isMissingNode()).isFalse();
+        assertThat(operation.path("requestBody").isMissingNode()).isTrue();
+        assertThat(operation.path("parameters").isMissingNode()).isTrue();
+        assertThat(operation.path("security").isArray()).isTrue();
+        assertThat(operation.path("security").isEmpty()).isTrue();
+    }
+
     private JsonNode fetchOpenApi() throws Exception {
         String responseBody = mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
