@@ -109,6 +109,8 @@ jobs:
         shell: pwsh
         env:
           DEPLOY_SHA: ${{ needs.prepare.outputs.deploy-sha }}
+          AUTH_DEMO_ENABLED: ${{ vars.PROD_AUTH_DEMO_ENABLED || 'false' }}
+          AUTH_DEMO_MEMBER_ID: ${{ vars.PROD_AUTH_DEMO_MEMBER_ID || '0' }}
           PROD_PUBLIC_BASE_URL: ${{ vars.PROD_PUBLIC_BASE_URL }}
           PROD_FRONTEND_REDIRECT_URI: ${{ vars.PROD_FRONTEND_REDIRECT_URI }}
           PROD_CORS_ALLOWED_ORIGINS: ${{ vars.PROD_CORS_ALLOWED_ORIGINS }}
@@ -133,6 +135,8 @@ jobs:
 
           ./scripts/gcp/deploy-prod.ps1 `
             -Image $env:DEPLOY_IMAGE `
+            -DemoEnabled $env:AUTH_DEMO_ENABLED `
+            -DemoMemberId $env:AUTH_DEMO_MEMBER_ID `
             -DeployCommit $env:DEPLOY_SHA `
             -PublicBaseUrl $publicBaseUrl `
             -FrontendRedirectUri $env:PROD_FRONTEND_REDIRECT_URI `

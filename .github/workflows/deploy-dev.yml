@@ -64,6 +64,8 @@ jobs:
       - name: Deploy and verify Cloud Run dev
         shell: pwsh
         env:
+          AUTH_DEMO_ENABLED: ${{ vars.DEV_AUTH_DEMO_ENABLED || 'false' }}
+          AUTH_DEMO_MEMBER_ID: ${{ vars.DEV_AUTH_DEMO_MEMBER_ID || '0' }}
           DEV_PUBLIC_BASE_URL: ${{ vars.DEV_PUBLIC_BASE_URL }}
           DEV_FRONTEND_REDIRECT_URI: ${{ vars.DEV_FRONTEND_REDIRECT_URI }}
           DEV_CORS_ALLOWED_ORIGINS: ${{ vars.DEV_CORS_ALLOWED_ORIGINS }}
@@ -79,4 +81,6 @@ jobs:
             -PublicBaseUrl $publicBaseUrl `
             -FrontendRedirectUri $env:DEV_FRONTEND_REDIRECT_URI `
             -CorsAllowedOrigins $env:DEV_CORS_ALLOWED_ORIGINS `
-            -OAuthAllowedFrontendOrigins $env:DEV_OAUTH_ALLOWED_FRONTEND_ORIGINS
+            -OAuthAllowedFrontendOrigins $env:DEV_OAUTH_ALLOWED_FRONTEND_ORIGINS `
+            -DemoEnabled $env:AUTH_DEMO_ENABLED `
+            -DemoMemberId $env:AUTH_DEMO_MEMBER_ID
