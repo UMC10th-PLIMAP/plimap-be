@@ -263,6 +263,45 @@ PostgreSQL 18 호환성 검증과 최초 PostGIS bootstrap의 역사적 근거, 
 
 SSE 구독은 Dev와 동일하게 약 50초 후 정상 종료하고 클라이언트 재연결을 사용합니다. SSE 연결도 concurrency 슬롯과 실행 시간을 점유하므로 Cloud Run instance, 요청 수와 비용을 함께 모니터링합니다. emitter registry는 instance 메모리에 있으므로 저장된 알림 목록을 복구 기준으로 삼고, 정확한 다중 instance fan-out이 필요하면 공유 Pub/Sub 채널을 도입합니다.
 
+### Prod 애플리케이션 5xx Discord 알림
+
+`GlobalExceptionHandler`가 처리한 애플리케이션 5xx는 Prod에서 JSON 구조화 로그로
+기록합니다. 로컬과 Dev의 콘솔 형식은 변경하지 않습니다. 알림 전달 경로는 다음과
+같으며 Cloud Monitoring Incident 또는 Log-based Alert를 사용하지 않습니다.
+
+```text
+Spring Boot HTTP_5XX 구조화 로그
+→ Cloud Logging Log Router Sink
+→ Pub/Sub
+→ Eventarc
+→ Python Cloud Run Function
+→ Discord #백엔드-서버에서-알림
+```
+
+Sink는 `resource.type=cloud_run_revision`, `plimap-api-prod`, `severity>=ERROR`,
+`jsonPayload.event=HTTP_5XX`와 5xx status를 모두 만족하는 로그만 선택합니다.
+Cloud Run 플랫폼이나 Load Balancer에서 애플리케이션에 도달하기 전에 발생한 5xx는
+이번 알림 범위에 포함하지 않습니다.
+
+구조화 payload에는 status, error code, method, Spring MVC route template, 실제
+응답 메시지와 예외 타입을 기록합니다. 원본 URI, query string, 헤더, 쿠키와 request
+body는 추가하지 않습니다. route template을 확인할 수 없으면 원본 URI 대신
+`<unresolved-route>`를 사용합니다. 유효한 `X-Cloud-Trace-Context`가 있으면
+Trace ID와 Cloud Logging trace 필드를 함께 기록합니다. 전체 예외 메시지와 stack
+trace는 Cloud Logging에만 보존합니다.
+
+Discord Embed는 LogEntry timestamp를 KST로 변환하고 method, route template, status,
+error code, 반환 메시지, 예외 타입, Trace ID, insert ID와 Logs Explorer 링크를
+표시합니다. 반환 메시지는 Discord 필드 한도인 1,024자를 넘는 경우에만 줄입니다.
+멘션은 비활성화합니다. 전송은 한 번만 시도하며 Discord timeout, 429 또는 5xx에 대한
+재시도와 DLQ는 두지 않고 Function ERROR 로그로 남깁니다.
+
+리소스 구성과 `[TEST]` 합성 로그 절차는
+[GCP 배포 스크립트](../scripts/gcp/README.md#prod-5xx-discord-알림), Webhook Secret
+생성·교체 규칙은 [Secret 관리 문서](../scripts/gcp/SECRETS.md#prod-5xx-discord-webhook)를
+따릅니다. 두 운영 스크립트는 기본적으로 plan-only이며 실제 구성 또는 테스트 로그
+기록에는 각각 명시적인 `-Apply`가 필요합니다.
+
 ### GCS 프로필 이미지
 
 Prod profile은 Application Default Credentials로 GCS Java client를 사용합니다. DB에는 `members/{memberId}/{uuid}.webp` object key만 저장하고 응답 URL은 `https://storage.googleapis.com/{bucket}/{objectKey}` 형식으로 생성합니다.
