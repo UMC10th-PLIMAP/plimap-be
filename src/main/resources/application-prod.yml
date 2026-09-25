@@ -41,3 +41,14 @@ springdoc:
     enabled: ${SWAGGER_ENABLED:false}
   swagger-ui:
     enabled: ${SWAGGER_ENABLED:false}
+
+logging:
+  structured:
+    format:
+      console: logstash
+    json:
+      rename:
+        level: severity
+        '@timestamp': time
+      add:
+        environment: prod

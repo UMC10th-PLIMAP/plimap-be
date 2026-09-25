@@ -38,6 +38,14 @@ class ProdConfigurationTest {
                 .isEqualTo("${SWAGGER_ENABLED:false}");
         assertThat(properties.getProperty("springdoc.swagger-ui.enabled"))
                 .isEqualTo("${SWAGGER_ENABLED:false}");
+        assertThat(properties.getProperty("logging.structured.format.console"))
+                .isEqualTo("logstash");
+        assertThat(properties.getProperty("logging.structured.json.rename.level"))
+                .isEqualTo("severity");
+        assertThat(properties.getProperty("logging.structured.json.rename.@timestamp"))
+                .isEqualTo("time");
+        assertThat(properties.getProperty("logging.structured.json.add.environment"))
+                .isEqualTo("prod");
     }
 
     @Test
