@@ -18,6 +18,10 @@ foreach ($scriptPath in @($configureScriptPath, $testEventScriptPath)) {
 
 $configureContent = Get-Content -LiteralPath $configureScriptPath -Raw
 $testEventContent = Get-Content -LiteralPath $testEventScriptPath -Raw
+$expectedTestMessageEscape = (
+    '\uC6B4\uC601 5xx Discord \uC54C\uB9BC \uACBD\uB85C ' +
+    '\uD14C\uC2A4\uD2B8\uC785\uB2C8\uB2E4.'
+)
 
 $requiredConfigurePatterns = @(
     'if \(-not \$Apply\)',
@@ -69,15 +73,18 @@ if ($pubsubIamBlock.Value -match '--condition') {
 foreach ($pattern in @(
     'if \(-not \$Apply\)',
     'testEvent\s*=\s*\$true',
-    '\$PSVersionTable\.PSVersion\.Major -lt 7',
-    '\$jsonPayload\.Replace\(',
-    '"logging", "write", "plimap-prod-5xx-alert-test", \$jsonPayloadArgument',
-    '--monitored-resource-type=cloud_run_revision',
-    '--severity=ERROR'
+    'gcloud auth print-access-token',
+    'logging\.googleapis\.com/v2/entries:write',
+    'type = "cloud_run_revision"',
+    'severity = "ERROR"',
+    'Encoding\]::UTF8\.GetBytes'
 )) {
     if ($testEventContent -notmatch $pattern) {
         throw "Missing required synthetic test protection: $pattern"
     }
+}
+if (-not $testEventContent.Contains($expectedTestMessageEscape)) {
+    throw "The synthetic test response message Unicode escape is invalid."
 }
 
 Write-Output "Prod 5xx Discord alert script tests passed."
