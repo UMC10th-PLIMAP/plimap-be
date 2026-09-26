@@ -23,6 +23,11 @@ $logEntry = [ordered]@{
     exceptionType = "java.lang.IllegalStateException"
 }
 $jsonPayload = $logEntry | ConvertTo-Json -Compress
+$jsonPayloadArgument = if ($PSVersionTable.PSVersion.Major -lt 7) {
+    $jsonPayload.Replace('"', '\"')
+} else {
+    $jsonPayload
+}
 $resourceLabels = @(
     "project_id=$ProjectId",
     "service_name=$SourceServiceName",
@@ -42,7 +47,7 @@ if (-not $Apply) {
 }
 
 $arguments = @(
-    "logging", "write", "plimap-prod-5xx-alert-test", $jsonPayload,
+    "logging", "write", "plimap-prod-5xx-alert-test", $jsonPayloadArgument,
     "--project=$ProjectId",
     "--payload-type=json",
     "--severity=ERROR",

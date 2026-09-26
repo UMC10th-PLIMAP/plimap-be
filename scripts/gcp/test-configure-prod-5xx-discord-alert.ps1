@@ -69,6 +69,9 @@ if ($pubsubIamBlock.Value -match '--condition') {
 foreach ($pattern in @(
     'if \(-not \$Apply\)',
     'testEvent\s*=\s*\$true',
+    '\$PSVersionTable\.PSVersion\.Major -lt 7',
+    '\$jsonPayload\.Replace\(',
+    '"logging", "write", "plimap-prod-5xx-alert-test", \$jsonPayloadArgument',
     '--monitored-resource-type=cloud_run_revision',
     '--severity=ERROR'
 )) {
