@@ -18,8 +18,8 @@ foreach ($scriptPath in @($configureScriptPath, $testEventScriptPath)) {
 
 $configureContent = Get-Content -LiteralPath $configureScriptPath -Raw
 $testEventContent = Get-Content -LiteralPath $testEventScriptPath -Raw
-$expectedTestMessageEscape = (
-    '\uC6B4\uC601 5xx Discord \uC54C\uB9BC \uACBD\uB85C ' +
+$expectedTestMessageEscapes = @(
+    '\uC6B4\uC601 5xx Discord \uC54C\uB9BC \uACBD\uB85C ',
     '\uD14C\uC2A4\uD2B8\uC785\uB2C8\uB2E4.'
 )
 
@@ -77,14 +77,18 @@ foreach ($pattern in @(
     'logging\.googleapis\.com/v2/entries:write',
     'type = "cloud_run_revision"',
     'severity = "ERROR"',
-    'Encoding\]::UTF8\.GetBytes'
+    'Encoding\]::UTF8\.GetBytes',
+    '\$requestBody\.Replace\(',
+    'The synthetic response message encoding is invalid'
 )) {
     if ($testEventContent -notmatch $pattern) {
         throw "Missing required synthetic test protection: $pattern"
     }
 }
-if (-not $testEventContent.Contains($expectedTestMessageEscape)) {
-    throw "The synthetic test response message Unicode escape is invalid."
+foreach ($expectedTestMessageEscape in $expectedTestMessageEscapes) {
+    if (-not $testEventContent.Contains($expectedTestMessageEscape)) {
+        throw "The synthetic test response message Unicode escape is invalid."
+    }
 }
 
 Write-Output "Prod 5xx Discord alert script tests passed."

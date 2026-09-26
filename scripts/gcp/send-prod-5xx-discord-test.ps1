@@ -12,8 +12,10 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$responseMessage = [regex]::Unescape(
-    '\uC6B4\uC601 5xx Discord \uC54C\uB9BC \uACBD\uB85C \uD14C\uC2A4\uD2B8\uC785\uB2C8\uB2E4.'
+$responseMessagePlaceholder = "__PLIMAP_TEST_RESPONSE_MESSAGE__"
+$responseMessageEscape = (
+    '\uC6B4\uC601 5xx Discord \uC54C\uB9BC \uACBD\uB85C ' +
+    '\uD14C\uC2A4\uD2B8\uC785\uB2C8\uB2E4.'
 )
 $logEntry = [ordered]@{
     event = "HTTP_5XX"
@@ -22,7 +24,7 @@ $logEntry = [ordered]@{
     errorCode = "COMMON_500_INTERNAL_SERVER_ERROR"
     method = "GET"
     routeTemplate = "/synthetic/prod-5xx-alert-test"
-    responseMessage = $responseMessage
+    responseMessage = $responseMessagePlaceholder
     exceptionType = "java.lang.IllegalStateException"
 }
 
@@ -30,19 +32,6 @@ Write-Output "Synthetic Prod 5xx alert test"
 Write-Output "  Project / region: $ProjectId / $Region"
 Write-Output "  Source service label: $SourceServiceName"
 Write-Output "  Discord title: [TEST]"
-
-if (-not $Apply) {
-    Write-Output "Plan only. No log entry was written. Re-run with -Apply to send one test event."
-    return
-}
-
-$accessToken = (@(& gcloud auth print-access-token) -join "").Trim()
-if ($LASTEXITCODE -ne 0) {
-    throw "Failed to obtain a gcloud access token."
-}
-if ([string]::IsNullOrWhiteSpace($accessToken)) {
-    throw "The gcloud access token is empty."
-}
 
 $writeRequest = [ordered]@{
     logName = "projects/$ProjectId/logs/plimap-prod-5xx-alert-test"
@@ -66,6 +55,32 @@ $writeRequest = [ordered]@{
     )
 }
 $requestBody = $writeRequest | ConvertTo-Json -Depth 8 -Compress
+$requestBody = $requestBody.Replace(
+    $responseMessagePlaceholder,
+    $responseMessageEscape
+)
+$decodedRequest = $requestBody | ConvertFrom-Json
+$expectedResponseMessage = [regex]::Unescape($responseMessageEscape)
+if (
+    $decodedRequest.entries[0].jsonPayload.responseMessage -ne
+    $expectedResponseMessage
+) {
+    throw "The synthetic response message encoding is invalid."
+}
+
+if (-not $Apply) {
+    Write-Output "Plan only. No log entry was written. Re-run with -Apply to send one test event."
+    return
+}
+
+$accessToken = (@(& gcloud auth print-access-token) -join "").Trim()
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to obtain a gcloud access token."
+}
+if ([string]::IsNullOrWhiteSpace($accessToken)) {
+    throw "The gcloud access token is empty."
+}
+
 $headers = @{ Authorization = "Bearer $accessToken" }
 
 try {
