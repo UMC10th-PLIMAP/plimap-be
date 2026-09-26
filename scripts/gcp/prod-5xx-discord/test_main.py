@@ -143,6 +143,7 @@ def test_Webhook은_멘션이_차단된_JSON을_전송한다(monkeypatch):
 
     sent = json.loads(captured["request"].data.decode("utf-8"))
     assert captured["timeout"] == 5
+    assert captured["request"].get_header("User-agent") == main.DISCORD_USER_AGENT
     assert sent["allowed_mentions"] == {"parse": []}
 
 

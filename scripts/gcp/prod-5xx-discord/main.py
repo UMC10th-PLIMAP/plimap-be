@@ -17,6 +17,9 @@ DISCORD_FIELD_LIMIT = 1_024
 DISCORD_FOOTER_LIMIT = 2_048
 WEBHOOK_TIMEOUT_SECONDS = 5
 DEFAULT_PROJECT_ID = "plimap"
+DISCORD_USER_AGENT = (
+    "DiscordBot (https://github.com/UMC10th-PLIMAP/plimap-be, 1.0)"
+)
 
 
 @functions_framework.cloud_event
@@ -121,7 +124,10 @@ def send_discord_webhook(payload):
     request = Request(
         webhook_url,
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": DISCORD_USER_AGENT,
+        },
         method="POST",
     )
     with urlopen(request, timeout=WEBHOOK_TIMEOUT_SECONDS) as response:
