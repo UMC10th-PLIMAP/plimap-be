@@ -296,6 +296,12 @@ error code, 반환 메시지, 예외 타입, Trace ID, insert ID와 Logs Explore
 멘션은 비활성화합니다. 전송은 한 번만 시도하며 Discord timeout, 429 또는 5xx에 대한
 재시도와 DLQ는 두지 않고 Function ERROR 로그로 남깁니다.
 
+Function 실행 계정 `plimap-prod-5xx-alert`과 소스 빌드 계정
+`plimap-prod-5xx-build`은 분리합니다. 실행 계정에는 Eventarc 수신과 Webhook Secret
+접근 권한만 부여하고, 빌드 계정에는 Cloud Run source build를 위한
+`roles/run.builder`를 부여해 기본 Compute 서비스 계정에 빌드 권한을 추가하지
+않습니다.
+
 리소스 구성과 `[TEST]` 합성 로그 절차는
 [GCP 배포 스크립트](../scripts/gcp/README.md#prod-5xx-discord-알림), Webhook Secret
 생성·교체 규칙은 [Secret 관리 문서](../scripts/gcp/SECRETS.md#prod-5xx-discord-webhook)를

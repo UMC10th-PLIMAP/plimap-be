@@ -18,6 +18,8 @@ param(
     [string]$SecretName = "plimap-prod-discord-webhook-url",
     [ValidatePattern("^[a-z][a-z0-9-]{4,28}[a-z0-9]$")]
     [string]$ServiceAccountId = "plimap-prod-5xx-alert",
+    [ValidatePattern("^[a-z][a-z0-9-]{4,28}[a-z0-9]$")]
+    [string]$BuildServiceAccountId = "plimap-prod-5xx-build",
     [switch]$Apply
 )
 
@@ -25,6 +27,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $serviceAccount = "$ServiceAccountId@$ProjectId.iam.gserviceaccount.com"
+$buildServiceAccount = "$BuildServiceAccountId@$ProjectId.iam.gserviceaccount.com"
+$buildServiceAccountResource = "projects/$ProjectId/serviceAccounts/$buildServiceAccount"
 $topicResource = "projects/$ProjectId/topics/$TopicName"
 $sinkDestination = "pubsub.googleapis.com/$topicResource"
 $functionSource = Join-Path $PSScriptRoot "prod-5xx-discord"
@@ -45,6 +49,10 @@ $loggingFilter = @(
     'jsonPayload.status>=500',
     'jsonPayload.status<600'
 ) -join " AND "
+
+if ($ServiceAccountId -eq $BuildServiceAccountId) {
+    throw "Runtime and build service accounts must be different."
+}
 
 function Invoke-Gcloud {
     param([Parameter(Mandatory)][string[]]$Arguments)
@@ -95,13 +103,15 @@ function Assert-SecretMetadata {
 }
 
 function Test-ServiceAccountExists {
+    param([Parameter(Mandatory)][string]$Email)
+
     $account = Get-GcloudText -Arguments @(
         "iam", "service-accounts", "list",
         "--project=$ProjectId",
-        "--filter=email=$serviceAccount",
+        "--filter=email=$Email",
         "--format=value(email)"
     )
-    return $account -eq $serviceAccount
+    return $account -eq $Email
 }
 
 function Test-TopicExists {
@@ -147,6 +157,7 @@ Write-Output "  Source service: $SourceServiceName"
 Write-Output "  Sink / topic: $SinkName / $TopicName"
 Write-Output "  Function / trigger: $FunctionName / $TriggerName"
 Write-Output "  Secret ID: $SecretName"
+Write-Output "  Runtime / build service accounts: $ServiceAccountId / $BuildServiceAccountId"
 Write-Output "  Delivery policy: one attempt, no retry or DLQ"
 
 if (-not $Apply) {
@@ -162,7 +173,7 @@ Invoke-Gcloud -Arguments $enableServiceArguments
 
 Assert-SecretMetadata
 
-if (-not (Test-ServiceAccountExists)) {
+if (-not (Test-ServiceAccountExists -Email $serviceAccount)) {
     Invoke-Gcloud -Arguments @(
         "iam", "service-accounts", "create", $ServiceAccountId,
         "--project=$ProjectId",
@@ -170,6 +181,22 @@ if (-not (Test-ServiceAccountExists)) {
         "--quiet"
     )
 }
+if (-not (Test-ServiceAccountExists -Email $buildServiceAccount)) {
+    Invoke-Gcloud -Arguments @(
+        "iam", "service-accounts", "create", $BuildServiceAccountId,
+        "--project=$ProjectId",
+        "--display-name=PLIMAP Prod 5xx Discord build",
+        "--quiet"
+    )
+}
+
+Invoke-Gcloud -Arguments @(
+    "projects", "add-iam-policy-binding", $ProjectId,
+    "--member=serviceAccount:$buildServiceAccount",
+    "--role=roles/run.builder",
+    "--condition=None",
+    "--quiet"
+)
 
 Invoke-Gcloud -Arguments @(
     "projects", "add-iam-policy-binding", $ProjectId,
@@ -203,6 +230,7 @@ Invoke-Gcloud -Arguments @(
     "--source=$functionSource",
     "--function=forward_prod_5xx_to_discord",
     "--base-image=python313",
+    "--build-service-account=$buildServiceAccountResource",
     "--service-account=$serviceAccount",
     "--set-env-vars=GOOGLE_CLOUD_PROJECT=$ProjectId",
     "--set-secrets=DISCORD_WEBHOOK_URL=$($SecretName):latest",

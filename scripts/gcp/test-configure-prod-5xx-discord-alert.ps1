@@ -21,8 +21,10 @@ $testEventContent = Get-Content -LiteralPath $testEventScriptPath -Raw
 
 $requiredConfigurePatterns = @(
     'if \(-not \$Apply\)',
+    'Runtime and build service accounts must be different',
     '--function=forward_prod_5xx_to_discord',
     '--base-image=python313',
+    '--build-service-account=\$buildServiceAccountResource',
     '--set-secrets=DISCORD_WEBHOOK_URL=',
     '--no-allow-unauthenticated',
     '--max-retry-attempts=1',
@@ -32,6 +34,7 @@ $requiredConfigurePatterns = @(
     'jsonPayload\.status>=500',
     'jsonPayload\.status<600',
     'roles/secretmanager\.secretAccessor',
+    'roles/run\.builder',
     'roles/run\.invoker',
     'roles/pubsub\.publisher'
 )
@@ -46,6 +49,9 @@ if ($configureContent -match 'secrets\s+versions\s+access') {
 }
 if ($configureContent -match 'DISCORD_WEBHOOK_URL\s*=\s*https?://') {
     throw "The configuration script must not contain a Discord webhook URL."
+}
+if ($configureContent -notmatch 'plimap-prod-5xx-build') {
+    throw "The configuration script must use a dedicated build service account."
 }
 
 foreach ($pattern in @(

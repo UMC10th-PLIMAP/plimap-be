@@ -52,6 +52,10 @@ GitHub Actions의 `Deploy Dev` 워크플로도 동일한 스크립트를 사용�
 ```
 
 계획과 Secret 준비 상태를 확인한 운영자가 별도 승인을 받은 뒤에만 리소스를 구성합니다.
+스크립트는 Function 실행용 `plimap-prod-5xx-alert`와 소스 빌드용
+`plimap-prod-5xx-build` 서비스 계정을 분리합니다. 빌드 계정에는 Cloud Run source
+build에 필요한 `roles/run.builder`만 부여하고, `gcloud run deploy`에 해당 계정을
+명시해 기본 Compute 서비스 계정에 빌드 권한을 추가하지 않습니다.
 
 ```powershell
 .\scripts\gcp\configure-prod-5xx-discord-alert.ps1 -Apply
