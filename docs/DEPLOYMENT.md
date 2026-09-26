@@ -288,7 +288,9 @@ Cloud Run 플랫폼이나 Load Balancer에서 애플리케이션에 도달하기
 body는 추가하지 않습니다. route template을 확인할 수 없으면 원본 URI 대신
 `<unresolved-route>`를 사용합니다. 유효한 `X-Cloud-Trace-Context`가 있으면
 Trace ID와 Cloud Logging trace 필드를 함께 기록합니다. 전체 예외 메시지와 stack
-trace는 Cloud Logging에만 보존합니다.
+trace는 Discord payload에서 제외하고 Cloud Logging 진단 정보로만 사용합니다. Logging
+Sink가 선택한 전체 LogEntry는 Pub/Sub 전송 경계를 통과하지만, Topic message retention은
+비활성화해 성공적으로 처리된 로그를 Topic에서 별도로 재생할 수 없게 합니다.
 
 Discord Embed는 LogEntry timestamp를 KST로 변환하고 method, route template, status,
 error code, 반환 메시지, 예외 타입, Trace ID, insert ID와 Logs Explorer 링크를

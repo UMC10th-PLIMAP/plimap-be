@@ -47,6 +47,7 @@ logging:
     format:
       console: logstash
     json:
+      customizer: com.example.plimap.global.config.GoogleCloudSeverityJsonMembersCustomizer
       rename:
         level: severity
         '@timestamp': time

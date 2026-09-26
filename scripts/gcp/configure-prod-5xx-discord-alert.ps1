@@ -124,6 +124,14 @@ function Test-TopicExists {
     return @($topic -split "\r?\n") -contains $topicResource
 }
 
+function Get-TopicMessageRetentionDuration {
+    return Get-GcloudText -Arguments @(
+        "pubsub", "topics", "describe", $TopicName,
+        "--project=$ProjectId",
+        "--format=value(messageRetentionDuration)"
+    )
+}
+
 function Test-TriggerExists {
     $trigger = Get-GcloudText -Arguments @(
         "eventarc", "triggers", "list",
@@ -218,7 +226,13 @@ if (-not (Test-TopicExists)) {
     Invoke-Gcloud -Arguments @(
         "pubsub", "topics", "create", $TopicName,
         "--project=$ProjectId",
-        "--message-retention-duration=86400s",
+        "--quiet"
+    )
+} elseif (-not [string]::IsNullOrWhiteSpace((Get-TopicMessageRetentionDuration))) {
+    Invoke-Gcloud -Arguments @(
+        "pubsub", "topics", "update", $TopicName,
+        "--project=$ProjectId",
+        "--clear-message-retention-duration",
         "--quiet"
     )
 }

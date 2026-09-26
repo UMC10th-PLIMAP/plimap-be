@@ -40,6 +40,8 @@ class ProdConfigurationTest {
                 .isEqualTo("${SWAGGER_ENABLED:false}");
         assertThat(properties.getProperty("logging.structured.format.console"))
                 .isEqualTo("logstash");
+        assertThat(properties.getProperty("logging.structured.json.customizer"))
+                .isEqualTo(GoogleCloudSeverityJsonMembersCustomizer.class.getName());
         assertThat(properties.getProperty("logging.structured.json.rename.level"))
                 .isEqualTo("severity");
         assertThat(properties.getProperty("logging.structured.json.rename.@timestamp"))

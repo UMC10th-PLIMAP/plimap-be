@@ -41,7 +41,9 @@ $requiredConfigurePatterns = @(
     'roles/secretmanager\.secretAccessor',
     'roles/run\.builder',
     'roles/run\.invoker',
-    'roles/pubsub\.publisher'
+    'roles/pubsub\.publisher',
+    'Get-TopicMessageRetentionDuration',
+    '--clear-message-retention-duration'
 )
 foreach ($pattern in $requiredConfigurePatterns) {
     if ($configureContent -notmatch $pattern) {
@@ -57,6 +59,9 @@ if ($configureContent -match 'DISCORD_WEBHOOK_URL\s*=\s*https?://') {
 }
 if ($configureContent -notmatch 'plimap-prod-5xx-build') {
     throw "The configuration script must use a dedicated build service account."
+}
+if ($configureContent -match '--message-retention-duration=') {
+    throw "The alert topic must not retain acknowledged LogEntries for replay."
 }
 
 $pubsubIamBlock = [regex]::Match(

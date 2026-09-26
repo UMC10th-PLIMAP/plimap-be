@@ -55,7 +55,9 @@ GitHub Actions의 `Deploy Dev` 워크플로도 동일한 스크립트를 사용�
 스크립트는 Function 실행용 `plimap-prod-5xx-alert`와 소스 빌드용
 `plimap-prod-5xx-build` 서비스 계정을 분리합니다. 빌드 계정에는 Cloud Run source
 build에 필요한 `roles/run.builder`만 부여하고, `gcloud run deploy`에 해당 계정을
-명시해 기본 Compute 서비스 계정에 빌드 권한을 추가하지 않습니다.
+명시해 기본 Compute 서비스 계정에 빌드 권한을 추가하지 않습니다. Pub/Sub Topic의
+message retention은 활성화하지 않으며, 기존 Topic에 설정되어 있으면 `-Apply` 실행 시
+해제해 성공적으로 처리된 전체 LogEntry가 Topic에서 별도로 재생되지 않게 합니다.
 
 ```powershell
 .\scripts\gcp\configure-prod-5xx-discord-alert.ps1 -Apply
