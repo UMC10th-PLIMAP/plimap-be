@@ -268,7 +268,14 @@ if (Test-TriggerExists) {
     $actualService = [string]$trigger.destination.cloudRun.service
     $actualServiceAccount = [string]$trigger.serviceAccount
     $maxAttempts = [int]$trigger.retryPolicy.maxAttempts
-    $actualEventType = [string]$trigger.eventFilters.type
+    $eventTypeFilter = @($trigger.eventFilters) | Where-Object {
+        $_.attribute -eq "type"
+    } | Select-Object -First 1
+    $actualEventType = if ($null -ne $eventTypeFilter) {
+        [string]$eventTypeFilter.value
+    } else {
+        [string]$trigger.eventFilters.type
+    }
     if ($actualTopic -ne $expectedTopic -or
         $actualService -ne $FunctionName -or
         $actualServiceAccount -ne $serviceAccount -or
@@ -321,7 +328,6 @@ Invoke-Gcloud -Arguments @(
     "--project=$ProjectId",
     "--member=$writerIdentity",
     "--role=roles/pubsub.publisher",
-    "--condition=None",
     "--quiet"
 )
 

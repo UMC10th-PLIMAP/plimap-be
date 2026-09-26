@@ -28,7 +28,8 @@ $requiredConfigurePatterns = @(
     '--set-secrets=DISCORD_WEBHOOK_URL=',
     '--no-allow-unauthenticated',
     '--max-retry-attempts=1',
-    '\$trigger\.eventFilters\.type',
+    '\$_\.attribute -eq "type"',
+    '\$eventTypeFilter\.value',
     'resource\.labels\.service_name=',
     'jsonPayload\.event="HTTP_5XX"',
     'jsonPayload\.status>=500',
@@ -52,6 +53,17 @@ if ($configureContent -match 'DISCORD_WEBHOOK_URL\s*=\s*https?://') {
 }
 if ($configureContent -notmatch 'plimap-prod-5xx-build') {
     throw "The configuration script must use a dedicated build service account."
+}
+
+$pubsubIamBlock = [regex]::Match(
+    $configureContent,
+    '(?s)"pubsub", "topics", "add-iam-policy-binding".*?"--quiet"'
+)
+if (-not $pubsubIamBlock.Success) {
+    throw "The Pub/Sub publisher IAM binding block is missing."
+}
+if ($pubsubIamBlock.Value -match '--condition') {
+    throw "Pub/Sub topic IAM binding does not support --condition."
 }
 
 foreach ($pattern in @(
