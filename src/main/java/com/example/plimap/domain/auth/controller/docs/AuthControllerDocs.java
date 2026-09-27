@@ -1,5 +1,6 @@
 package com.example.plimap.domain.auth.controller.docs;
 
+import com.example.plimap.domain.auth.dto.request.AuthReqDTO;
 import com.example.plimap.domain.auth.dto.response.AuthResponse;
 import com.example.plimap.domain.auth.entity.AuthMember;
 import com.example.plimap.domain.member.dto.request.MemberReqDTO;
@@ -23,6 +24,48 @@ import org.springframework.security.web.csrf.CsrfToken;
 
 @Tag(name = "Auth", description = "인증 API")
 public interface AuthControllerDocs {
+
+    @Operation(
+            summary = "앱(네이티브) 로그인",
+            description = """
+                    앱이 카카오/구글/애플 SDK로 발급받은 토큰(카카오는 액세스 토큰, 구글/애플은 ID 토큰)을 전달하면
+                    서버가 provider에 직접 토큰을 검증하고 accessToken/refreshToken을 JSON 응답으로 반환합니다.
+                    기존 웹 로그인(OAuth2Login 리다이렉트 + 쿠키)과는 별개의 흐름입니다.
+
+                    정지/자동탈퇴 회원은 200 응답에 accessToken 없이 status/reasonCategory/reasonDetail/suspendedUntil 등
+                    제재 정보만 채워서 반환합니다.
+                    """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "요청 본문 검증 실패 또는 지원하지 않는 provider인 경우",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorApiResponse.class),
+                            examples = @ExampleObject(
+                                    name = "COMMON_400_VALIDATION_FAILED",
+                                    summary = "요청 값 검증 실패",
+                                    value = CommonSwaggerErrorExamples.VALIDATION_FAILED
+                            )
+                    )),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "provider 토큰 검증에 실패한 경우",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorApiResponse.class),
+                            examples = @ExampleObject(
+                                    name = "AUTH_APP_TOKEN_VERIFICATION_FAILED",
+                                    summary = "앱 토큰 검증 실패",
+                                    value = AuthSwaggerErrorExamples.APP_TOKEN_VERIFICATION_FAILED
+                            )
+                    ))
+    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "200",
+            description = "요청 성공(제재 회원은 토큰 없이 제재 정보만 포함)")
+    ApiResponse<AuthResponse.AppLogin> appLogin(AuthReqDTO.AppLogin request);
 
     @Operation(
             summary = "CSRF 토큰 발급",

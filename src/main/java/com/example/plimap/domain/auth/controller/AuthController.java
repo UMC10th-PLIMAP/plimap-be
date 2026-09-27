@@ -1,11 +1,13 @@
 package com.example.plimap.domain.auth.controller;
 
 import com.example.plimap.domain.auth.controller.docs.AuthControllerDocs;
+import com.example.plimap.domain.auth.dto.request.AuthReqDTO;
 import com.example.plimap.domain.auth.dto.response.AuthResponse;
 import com.example.plimap.domain.auth.entity.AuthMember;
 import com.example.plimap.domain.auth.exception.AuthErrorCode;
 import com.example.plimap.domain.auth.exception.AuthException;
 import com.example.plimap.domain.auth.exception.AuthSuccessCode;
+import com.example.plimap.domain.auth.service.command.AppOAuthCommandService;
 import com.example.plimap.domain.member.converter.MemberConverter;
 import com.example.plimap.domain.member.dto.request.MemberReqDTO;
 import com.example.plimap.domain.member.dto.request.TermsReqDTO;
@@ -54,6 +56,13 @@ public class AuthController implements AuthControllerDocs {
     private final RefreshTokenService refreshTokenService;
     private final AuthCookieUtil authCookieUtil;
     private final SessionInvalidationService sessionInvalidationService;
+    private final AppOAuthCommandService appOAuthCommandService;
+
+    @Override
+    @PostMapping("/app/login")
+    public ApiResponse<AuthResponse.AppLogin> appLogin(@Valid @RequestBody AuthReqDTO.AppLogin request) {
+        return ApiResponse.success(AuthSuccessCode.APP_LOGIN, appOAuthCommandService.login(request));
+    }
 
     @Override
     @GetMapping("/csrf")

@@ -90,8 +90,9 @@ public class CustomOAuthService extends DefaultOAuth2UserService {
         return new OAuthMember(member, oAuthUser.getAttributes());
     }
 
+    // AppOAuthCommandServiceImpl(앱 로그인)에서도 재사용하므로 public.
     @Transactional
-    Member resolveMember(AuthProvider provider, OAuthDTO dto) {
+    public Member resolveMember(AuthProvider provider, OAuthDTO dto) {
         Member member = socialAccountRepository
                 .findByProviderAndProviderSubject(provider, dto.getProviderSubject())
                 .map(SocialAccount::getMember)

@@ -1,0 +1,99 @@
+package com.example.plimap.domain.auth.service.command.impl;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+import com.example.plimap.domain.auth.dto.OAuthDTO;
+import com.example.plimap.domain.auth.dto.request.AuthReqDTO;
+import com.example.plimap.domain.auth.dto.response.AuthResponse;
+import com.example.plimap.domain.auth.enums.AuthProvider;
+import com.example.plimap.domain.auth.exception.SanctionedMemberAuthenticationException;
+import com.example.plimap.domain.member.entity.Member;
+import com.example.plimap.domain.member.enums.MemberStatus;
+import com.example.plimap.global.external.kakao.KakaoUserApiClient;
+import com.example.plimap.global.external.kakao.KakaoUserInfoResponse;
+import com.example.plimap.global.security.JwtUtil;
+import com.example.plimap.global.security.RefreshTokenService;
+import java.time.Duration;
+import java.time.Instant;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
+class AppOAuthCommandServiceImplTest {
+
+    private final CustomOAuthService customOAuthService = mock(CustomOAuthService.class);
+    private final KakaoUserApiClient kakaoUserApiClient = mock(KakaoUserApiClient.class);
+    private final IdTokenVerifier idTokenVerifier = mock(IdTokenVerifier.class);
+    private final JwtUtil jwtUtil = mock(JwtUtil.class);
+    private final RefreshTokenService refreshTokenService = mock(RefreshTokenService.class);
+
+    private final AppOAuthCommandServiceImpl service = new AppOAuthCommandServiceImpl(
+            customOAuthService, kakaoUserApiClient, idTokenVerifier, jwtUtil, refreshTokenService,
+            "google-app-client-id", "apple-app-client-id"
+    );
+
+    @Test
+    void 카카오_액세스_토큰으로_로그인하면_회원을_조회하고_토큰을_발급한다() {
+        KakaoUserInfoResponse response = new KakaoUserInfoResponse(
+                12345L,
+                new KakaoUserInfoResponse.KakaoAccount(
+                        "user@kakao.com",
+                        new KakaoUserInfoResponse.KakaoAccount.Profile("닉네임")
+                )
+        );
+        when(kakaoUserApiClient.getUserInfo("kakao-access-token")).thenReturn(response);
+
+        Member member = mock(Member.class);
+        when(member.getId()).thenReturn(1L);
+        when(member.isOnboarded()).thenReturn(true);
+
+        ArgumentCaptor<OAuthDTO> dtoCaptor = ArgumentCaptor.forClass(OAuthDTO.class);
+        when(customOAuthService.resolveMember(eq(AuthProvider.KAKAO), dtoCaptor.capture())).thenReturn(member);
+
+        when(jwtUtil.createAccessToken(any())).thenReturn("access-token");
+        when(jwtUtil.createRefreshToken(any())).thenReturn("refresh-token");
+        when(jwtUtil.getJti("refresh-token")).thenReturn("jti-1");
+        when(jwtUtil.getRefreshTokenExpiry()).thenReturn(Duration.ofDays(14));
+
+        AuthResponse.AppLogin result = service.login(new AuthReqDTO.AppLogin(AuthProvider.KAKAO, "kakao-access-token"));
+
+        assertThat(result.accessToken()).isEqualTo("access-token");
+        assertThat(result.refreshToken()).isEqualTo("refresh-token");
+        assertThat(result.isNewUser()).isFalse();
+        assertThat(result.status()).isEqualTo(MemberStatus.ACTIVE);
+        assertThat(dtoCaptor.getValue().getProviderSubject()).isEqualTo("12345");
+        assertThat(dtoCaptor.getValue().getEmail()).isEqualTo("user@kakao.com");
+        verify(refreshTokenService).save(1L, "jti-1", Duration.ofDays(14));
+    }
+
+    @Test
+    void 정지된_회원이_로그인하면_토큰_없이_제재_정보만_반환한다() {
+        KakaoUserInfoResponse response = new KakaoUserInfoResponse(
+                1L,
+                new KakaoUserInfoResponse.KakaoAccount("a@b.com", new KakaoUserInfoResponse.KakaoAccount.Profile("n"))
+        );
+        when(kakaoUserApiClient.getUserInfo(anyString())).thenReturn(response);
+
+        Member member = mock(Member.class);
+        when(member.getStatus()).thenReturn(MemberStatus.SUSPENDED);
+        when(member.getSuspendedUntil()).thenReturn(Instant.now().plusSeconds(3600));
+        // 예외는 when(...) 체인 밖에서 미리 만들어야 한다 - 인라인으로 넘기면 예외 생성자가
+        // member(다른 mock)의 getter를 호출해서 Mockito의 스터빙 상태 추적이 꼬인다.
+        SanctionedMemberAuthenticationException sanctioned = new SanctionedMemberAuthenticationException(member);
+        when(customOAuthService.resolveMember(any(), any())).thenThrow(sanctioned);
+
+        AuthResponse.AppLogin result = service.login(new AuthReqDTO.AppLogin(AuthProvider.KAKAO, "kakao-access-token"));
+
+        assertThat(result.accessToken()).isNull();
+        assertThat(result.refreshToken()).isNull();
+        assertThat(result.status()).isEqualTo(MemberStatus.SUSPENDED);
+        assertThat(result.suspendedUntil()).isNotNull();
+        verifyNoInteractions(jwtUtil, refreshTokenService);
+    }
+}

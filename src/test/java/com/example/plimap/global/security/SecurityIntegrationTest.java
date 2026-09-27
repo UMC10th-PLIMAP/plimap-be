@@ -2,6 +2,7 @@ package com.example.plimap.global.security;
 
 import com.example.plimap.domain.auth.controller.AuthController;
 import com.example.plimap.domain.auth.controller.DemoAuthController;
+import com.example.plimap.domain.auth.service.command.AppOAuthCommandService;
 import com.example.plimap.domain.auth.service.command.DemoAuthCommandService;
 import java.time.Duration;
 import com.example.plimap.domain.auth.service.command.impl.CustomOAuthService;
@@ -116,6 +117,9 @@ class SecurityIntegrationTest {
 
     @MockitoBean
     private DemoAuthCommandService demoAuthCommandService;
+
+    @MockitoBean
+    private AppOAuthCommandService appOAuthCommandService;
 
     @BeforeEach
     void setUp() {
