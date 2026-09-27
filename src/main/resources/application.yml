@@ -109,7 +109,8 @@ app-oauth:
   google:
     client-id: ${GOOGLE_APP_CLIENT_ID:${spring.security.oauth2.client.registration.google.client-id}}
   apple:
-    client-id: ${APPLE_APP_CLIENT_ID:}
+    # kr.plimap.app: iOS 앱 Bundle ID(=Apple 로그인 aud 값). 비밀값이 아니라 공개 식별자라 기본값으로 고정.
+    client-id: ${APPLE_APP_CLIENT_ID:kr.plimap.app}
 
 # iTunes Search API 설정
 itunes:
