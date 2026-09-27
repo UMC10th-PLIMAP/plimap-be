@@ -11,6 +11,9 @@
 - `grant-prod-database-existing-objects.sql`: 각 기존 객체 owner가 별도로 실행해 자신이 소유한 객체에 runtime 권한을 부여합니다.
 - `bootstrap-prod-cloud-run.ps1`: 신규 프로젝트·재해 복구 시 LB 전용 ingress와 서비스 단위 IAM을 재구축합니다. 기본 실행은 plan-only이며 승인된 `-Apply`가 있어야 변경합니다.
 - `deploy-prod.ps1`: Prod revision을 공개 traffic tag 없이 0%로 기동하고 Ready·image digest를 검증한 뒤 트래픽을 전환하며, LB 전용 상태 또는 선택적 공개 smoke 검증 실패 시 직전 revision을 복구합니다.
+- `configure-prod-5xx-discord-alert.ps1`: Prod 애플리케이션 5xx 로그를 Discord로 전달하는 Logging Sink, Pub/Sub, Cloud Run Function과 Eventarc를 구성합니다. 기본 실행은 plan-only입니다.
+- `send-prod-5xx-discord-test.ps1`: 같은 전달 경로를 확인하는 `[TEST]` 합성 로그 한 건을 기록합니다. 기본 실행은 plan-only입니다.
+- `prod-5xx-discord/`: Python Cloud Run Function 소스와 단위 테스트를 보관합니다.
 - `SECRETS.md`: 환경변수, GitHub Environment Variable, Secret Manager 매핑과 값 교체 방법을 설명합니다.
 
 ## 공통 준비
@@ -31,6 +34,53 @@
 ```
 
 GitHub Actions의 `Deploy Dev` 워크플로도 동일한 스크립트를 사용합니다.
+
+## Prod 5xx Discord 알림
+
+대상은 `GlobalExceptionHandler`가 처리하고 `HTTP_5XX` 구조화 로그를 남긴
+`plimap-api-prod` 요청입니다. Cloud Run 플랫폼 또는 Load Balancer에서 애플리케이션에
+도달하기 전에 발생한 5xx는 포함하지 않습니다.
+
+운영자가 Discord `#백엔드-서버에서-알림` 채널의 Webhook을 만든 뒤 GCP Console에서
+`plimap-prod-discord-webhook-url` Secret과 ENABLED 버전을 먼저 생성합니다. URL 값은
+명령행, 문서, 이슈 또는 채팅에 입력하지 않습니다.
+
+저장소 루트에서 변경 없는 계획을 먼저 확인합니다.
+
+```powershell
+.\scripts\gcp\configure-prod-5xx-discord-alert.ps1
+```
+
+계획과 Secret 준비 상태를 확인한 운영자가 별도 승인을 받은 뒤에만 리소스를 구성합니다.
+스크립트는 Function 실행용 `plimap-prod-5xx-alert`와 소스 빌드용
+`plimap-prod-5xx-build` 서비스 계정을 분리합니다. 빌드 계정에는 Cloud Run source
+build에 필요한 `roles/run.builder`만 부여하고, `gcloud run deploy`에 해당 계정을
+명시해 기본 Compute 서비스 계정에 빌드 권한을 추가하지 않습니다. Pub/Sub Topic의
+message retention은 활성화하지 않으며, 기존 Topic에 설정되어 있으면 `-Apply` 실행 시
+해제해 성공적으로 처리된 전체 LogEntry가 Topic에서 별도로 재생되지 않게 합니다.
+
+```powershell
+.\scripts\gcp\configure-prod-5xx-discord-alert.ps1 -Apply
+```
+
+구성이 완료되면 테스트도 먼저 plan-only로 확인합니다.
+
+```powershell
+.\scripts\gcp\send-prod-5xx-discord-test.ps1
+.\scripts\gcp\send-prod-5xx-discord-test.ps1 -Apply
+```
+
+`-Apply` 테스트는 `testEvent=true`인 Cloud Logging 항목 한 건을 기록합니다. Logging
+Sink, Pub/Sub, Eventarc와 Function을 모두 통과한 메시지는 같은 Discord 채널에
+`🧪 [TEST]` 제목으로 표시됩니다. 테스트 실행은 운영 배포와 분리하며, Function은
+Discord 실패를 한 번 기록하고 재시도하거나 DLQ에 저장하지 않습니다.
+
+로컬 정적 검증과 Python 단위 테스트는 다음 명령을 사용합니다.
+
+```powershell
+.\scripts\gcp\test-configure-prod-5xx-discord-alert.ps1
+python -m pytest .\scripts\gcp\prod-5xx-discord\test_main.py
+```
 
 ## Prod Cloud Run 재구축
 

@@ -205,7 +205,7 @@ class GlobalExceptionHandlerTest {
                 .contains(
                         "ERROR",
                         "status=500 code=COMMON_500_INTERNAL_SERVER_ERROR "
-                                + "method=GET uri=/exception-test/internal-error "
+                                + "method=GET routeTemplate=/exception-test/internal-error "
                                 + "exception=IllegalStateException",
                         "java.lang.IllegalStateException: unexpected error",
                         "GlobalExceptionHandlerTest$TestController.internalError"

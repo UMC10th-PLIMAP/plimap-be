@@ -1,0 +1,5 @@
+.gcloudignore
+__pycache__/
+.pytest_cache/
+test_main.py
+requirements-test.txt
