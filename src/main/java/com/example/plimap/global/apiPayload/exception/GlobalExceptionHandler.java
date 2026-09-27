@@ -185,7 +185,7 @@ public class GlobalExceptionHandler {
             HttpServletRequest request,
             Exception exception
     ) {
-        logException(errorCode, request, exception);
+        logException(errorCode, errorCode.getMessage(), request, exception);
         return ResponseEntity
                 .status(errorCode.getStatus())
                 .body(ApiResponse.failure(errorCode));
@@ -197,13 +197,14 @@ public class GlobalExceptionHandler {
             HttpServletRequest request,
             Exception exception
     ) {
-        logException(errorCode, request, exception);
+        logException(errorCode, message, request, exception);
         return ResponseEntity
                 .status(errorCode.getStatus())
                 .body(ApiResponse.failure(errorCode, message));
     }
 
     private void logException(BaseErrorCode errorCode,
+                              String responseMessage,
                               HttpServletRequest request,
                               Exception exception) {
         if (errorCode.getStatus().is4xxClientError()) {
@@ -211,7 +212,7 @@ public class GlobalExceptionHandler {
             return;
         }
 
-        HttpErrorLogger.error(request, errorCode, exception);
+        HttpErrorLogger.error(request, errorCode, responseMessage, exception);
     }
 
     private String getFirstErrorMessage(List<? extends MessageSourceResolvable> errors) {
