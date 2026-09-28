@@ -17,6 +17,7 @@ import com.example.plimap.global.external.kakao.KakaoUserInfoResponse;
 import com.example.plimap.global.security.JwtUtil;
 import com.example.plimap.global.security.RefreshTokenService;
 import io.jsonwebtoken.Claims;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -24,9 +25,11 @@ import org.springframework.stereotype.Service;
 public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
 
     private static final String GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
-    private static final String GOOGLE_ISSUER = "https://accounts.google.com";
+    // 구글 ID 토큰의 iss는 https://accounts.google.com / accounts.google.com 둘 다 유효하다.
+    private static final Set<String> GOOGLE_ISSUERS = Set.of(
+            "https://accounts.google.com", "accounts.google.com");
     private static final String APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys";
-    private static final String APPLE_ISSUER = "https://appleid.apple.com";
+    private static final Set<String> APPLE_ISSUERS = Set.of("https://appleid.apple.com");
 
     private final CustomOAuthService customOAuthService;
     private final KakaoUserApiClient kakaoUserApiClient;
@@ -93,7 +96,7 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
     }
 
     private GoogleDTO toGoogleDTO(String idToken) {
-        Claims claims = idTokenVerifier.verify(GOOGLE_JWKS_URL, GOOGLE_ISSUER, googleAppClientId, idToken);
+        Claims claims = idTokenVerifier.verify(GOOGLE_JWKS_URL, GOOGLE_ISSUERS, googleAppClientId, idToken);
         String providerSubject = claims.getSubject();
         if (providerSubject == null) {
             throw new MemberException(MemberErrorCode.INVALID_SOCIAL_PROFILE);
@@ -104,7 +107,7 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
     }
 
     private AppleDTO toAppleDTO(String idToken) {
-        Claims claims = idTokenVerifier.verify(APPLE_JWKS_URL, APPLE_ISSUER, appleAppClientId, idToken);
+        Claims claims = idTokenVerifier.verify(APPLE_JWKS_URL, APPLE_ISSUERS, appleAppClientId, idToken);
         String providerSubject = claims.getSubject();
         if (providerSubject == null) {
             throw new MemberException(MemberErrorCode.INVALID_SOCIAL_PROFILE);

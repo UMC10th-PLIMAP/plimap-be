@@ -14,6 +14,7 @@ import io.jsonwebtoken.security.Jwks;
 import java.security.Key;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -28,7 +29,7 @@ class IdTokenVerifier {
     private final RestClient restClient = RestClient.builder().build();
     private final ConcurrentHashMap<String, CachedJwkSet> jwkSetCache = new ConcurrentHashMap<>();
 
-    Claims verify(String jwksUrl, String issuer, String audience, String idToken) {
+    Claims verify(String jwksUrl, Set<String> allowedIssuers, String audience, String idToken) {
         JwkSet jwkSet = getJwkSet(jwksUrl);
         Locator<Key> keyLocator = new LocatorAdapter<>() {
             @Override
@@ -42,10 +43,10 @@ class IdTokenVerifier {
             }
         };
 
+        Claims claims;
         try {
-            return Jwts.parser()
+            claims = Jwts.parser()
                     .keyLocator(keyLocator)
-                    .requireIssuer(issuer)
                     .requireAudience(audience)
                     .build()
                     .parseSignedClaims(idToken)
@@ -55,6 +56,14 @@ class IdTokenVerifier {
         } catch (JwtException exception) {
             throw new AuthException(AuthErrorCode.APP_TOKEN_VERIFICATION_FAILED, exception);
         }
+
+        // jjwt의 requireIssuer()는 값 하나만 정확히 일치해야 해서, 구글처럼 iss가
+        // 두 가지 표기(https://accounts.google.com / accounts.google.com)로 올 수 있는
+        // provider는 여기서 직접 허용 목록 포함 여부로 검증한다.
+        if (!allowedIssuers.contains(claims.getIssuer())) {
+            throw new AuthException(AuthErrorCode.APP_TOKEN_VERIFICATION_FAILED);
+        }
+        return claims;
     }
 
     private JwkSet getJwkSet(String jwksUrl) {

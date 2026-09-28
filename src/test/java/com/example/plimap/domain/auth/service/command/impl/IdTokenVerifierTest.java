@@ -16,6 +16,7 @@ import java.security.interfaces.RSAPublicKey;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Date;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.Test;
 class IdTokenVerifierTest {
 
     private static final String ISSUER = "https://issuer.example.com";
+    private static final Set<String> ISSUERS = Set.of(ISSUER);
     private static final String AUDIENCE = "test-client-id";
     private static final String KID = "test-kid";
 
@@ -57,34 +59,53 @@ class IdTokenVerifierTest {
 
     @Test
     void 유효한_ID_토큰의_서명과_iss_aud를_검증해서_claims를_반환한다() {
-        String idToken = signedIdToken(AUDIENCE, new Date(System.currentTimeMillis() + 60_000));
+        String idToken = signedIdToken(ISSUER, AUDIENCE, new Date(System.currentTimeMillis() + 60_000));
 
-        Claims claims = verifier.verify(jwksUrl, ISSUER, AUDIENCE, idToken);
+        Claims claims = verifier.verify(jwksUrl, ISSUERS, AUDIENCE, idToken);
 
         assertThat(claims.getSubject()).isEqualTo("provider-subject-1");
         assertThat(claims.get("email", String.class)).isEqualTo("user@example.com");
     }
 
     @Test
-    void aud가_다르면_검증에_실패한다() {
-        String idToken = signedIdToken("other-client-id", new Date(System.currentTimeMillis() + 60_000));
+    void 허용된_issuer가_여러_개면_그_중_하나만_일치해도_통과한다() {
+        // given - 구글은 iss가 https://accounts.google.com / accounts.google.com 둘 다 올 수 있다
+        Set<String> allowedIssuers = Set.of("https://accounts.google.com", "accounts.google.com");
+        String idToken = signedIdToken("accounts.google.com", AUDIENCE, new Date(System.currentTimeMillis() + 60_000));
 
-        assertThatThrownBy(() -> verifier.verify(jwksUrl, ISSUER, AUDIENCE, idToken))
+        Claims claims = verifier.verify(jwksUrl, allowedIssuers, AUDIENCE, idToken);
+
+        assertThat(claims.getIssuer()).isEqualTo("accounts.google.com");
+    }
+
+    @Test
+    void 허용되지_않은_issuer면_검증에_실패한다() {
+        String idToken = signedIdToken("https://evil.example.com", AUDIENCE, new Date(System.currentTimeMillis() + 60_000));
+
+        assertThatThrownBy(() -> verifier.verify(jwksUrl, ISSUERS, AUDIENCE, idToken))
+                .isInstanceOf(AuthException.class);
+    }
+
+    @Test
+    void aud가_다르면_검증에_실패한다() {
+        String idToken = signedIdToken(ISSUER, "other-client-id", new Date(System.currentTimeMillis() + 60_000));
+
+        assertThatThrownBy(() -> verifier.verify(jwksUrl, ISSUERS, AUDIENCE, idToken))
                 .isInstanceOf(AuthException.class);
     }
 
     @Test
     void 만료된_토큰은_검증에_실패한다() {
-        String idToken = signedIdToken(AUDIENCE, new Date(System.currentTimeMillis() - 60_000));
+        String idToken = signedIdToken(ISSUER, AUDIENCE, new Date(System.currentTimeMillis() - 60_000));
 
-        assertThatThrownBy(() -> verifier.verify(jwksUrl, ISSUER, AUDIENCE, idToken))
+        assertThatThrownBy(() -> verifier.verify(jwksUrl, ISSUERS, AUDIENCE, idToken))
                 .isInstanceOf(AuthException.class);
     }
 
-    private String signedIdToken(String audience, Date expiration) {
+    private String signedIdToken(String issuer, String audience, Date expiration) {
         return Jwts.builder()
                 .setHeaderParam("kid", KID)
-                .issuer(ISSUER)
+                .issuer(issuer)
                 .setAudience(audience)
                 .subject("provider-subject-1")
                 .claim("email", "user@example.com")
