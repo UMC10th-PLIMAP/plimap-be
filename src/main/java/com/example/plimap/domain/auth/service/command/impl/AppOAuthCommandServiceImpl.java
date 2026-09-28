@@ -7,11 +7,14 @@ import com.example.plimap.domain.auth.dto.OAuthDTO;
 import com.example.plimap.domain.auth.dto.request.AuthReqDTO;
 import com.example.plimap.domain.auth.dto.response.AuthResponse;
 import com.example.plimap.domain.auth.entity.AuthMember;
+import com.example.plimap.domain.auth.exception.AuthErrorCode;
+import com.example.plimap.domain.auth.exception.AuthException;
 import com.example.plimap.domain.auth.exception.SanctionedMemberAuthenticationException;
 import com.example.plimap.domain.auth.service.command.AppOAuthCommandService;
 import com.example.plimap.domain.member.entity.Member;
 import com.example.plimap.domain.member.exception.MemberErrorCode;
 import com.example.plimap.domain.member.exception.MemberException;
+import com.example.plimap.global.external.kakao.KakaoClientException;
 import com.example.plimap.global.external.kakao.KakaoUserApiClient;
 import com.example.plimap.global.external.kakao.KakaoUserInfoResponse;
 import com.example.plimap.global.security.JwtUtil;
@@ -86,7 +89,14 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
     }
 
     private KakaoDTO toKakaoDTO(String accessToken) {
-        KakaoUserInfoResponse response = kakaoUserApiClient.getUserInfo(accessToken);
+        KakaoUserInfoResponse response;
+        try {
+            response = kakaoUserApiClient.getUserInfo(accessToken);
+        } catch (KakaoClientException exception) {
+            // 만료/위조 등 유효하지 않은 액세스 토큰이면 카카오가 401을 내려주는데, 이 경우도
+            // "앱이 보낸 토큰을 검증하지 못했다"는 동일한 의미이므로 통일해서 던진다.
+            throw new AuthException(AuthErrorCode.APP_TOKEN_VERIFICATION_FAILED, exception);
+        }
         if (response.id() == null || response.kakaoAccount() == null) {
             throw new MemberException(MemberErrorCode.INVALID_SOCIAL_PROFILE);
         }

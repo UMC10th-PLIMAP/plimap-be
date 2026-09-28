@@ -1,6 +1,7 @@
 package com.example.plimap.domain.auth.service.command.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -13,9 +14,11 @@ import com.example.plimap.domain.auth.dto.OAuthDTO;
 import com.example.plimap.domain.auth.dto.request.AuthReqDTO;
 import com.example.plimap.domain.auth.dto.response.AuthResponse;
 import com.example.plimap.domain.auth.enums.AuthProvider;
+import com.example.plimap.domain.auth.exception.AuthException;
 import com.example.plimap.domain.auth.exception.SanctionedMemberAuthenticationException;
 import com.example.plimap.domain.member.entity.Member;
 import com.example.plimap.domain.member.enums.MemberStatus;
+import com.example.plimap.global.external.kakao.KakaoClientException;
 import com.example.plimap.global.external.kakao.KakaoUserApiClient;
 import com.example.plimap.global.external.kakao.KakaoUserInfoResponse;
 import com.example.plimap.global.security.JwtUtil;
@@ -73,6 +76,18 @@ class AppOAuthCommandServiceImplTest {
         assertThat(dtoCaptor.getValue().getProviderSubject()).isEqualTo("12345");
         assertThat(dtoCaptor.getValue().getEmail()).isEqualTo("user@kakao.com");
         verify(refreshTokenService).save(1L, "jti-1", Duration.ofDays(14));
+    }
+
+    @Test
+    void 카카오_토큰_검증에_실패하면_500이_아니라_APP_TOKEN_VERIFICATION_FAILED로_변환된다() {
+        // given - 만료/위조된 액세스 토큰이면 카카오 유저 API 호출 자체가 401로 실패한다
+        when(kakaoUserApiClient.getUserInfo(anyString()))
+                .thenThrow(new KakaoClientException("Kakao User API request failed"));
+
+        // when & then
+        assertThatThrownBy(() -> service.login(new AuthReqDTO.AppLogin(AuthProvider.KAKAO, "invalid-token")))
+                .isInstanceOf(AuthException.class);
+        verifyNoInteractions(customOAuthService, jwtUtil, refreshTokenService);
     }
 
     @Test
