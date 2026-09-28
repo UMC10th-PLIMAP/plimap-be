@@ -28,23 +28,19 @@ import org.springframework.web.client.RestClientException;
 class IdTokenVerifier {
 
     private static final Duration JWKS_CACHE_TTL = Duration.ofHours(1);
+    private static final Duration MIN_FORCED_REFRESH_INTERVAL = Duration.ofSeconds(60);
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(2);
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(5);
 
     private final RestClient restClient = buildRestClient();
     private final ConcurrentHashMap<String, CachedJwkSet> jwkSetCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Instant> lastForcedRefreshAt = new ConcurrentHashMap<>();
 
     Claims verify(String jwksUrl, Set<String> allowedIssuers, String audience, String idToken) {
-        JwkSet jwkSet = getJwkSet(jwksUrl);
         Locator<Key> keyLocator = new LocatorAdapter<>() {
             @Override
             protected Key locate(ProtectedHeader header) {
-                String kid = header.getKeyId();
-                return jwkSet.getKeys().stream()
-                        .filter(jwk -> kid != null && kid.equals(jwk.get("kid")))
-                        .findFirst()
-                        .map(Jwk::toKey)
-                        .orElseThrow(() -> new AuthException(AuthErrorCode.APP_TOKEN_VERIFICATION_FAILED));
+                return locateKey(jwksUrl, header.getKeyId());
             }
         };
 
@@ -71,10 +67,51 @@ class IdTokenVerifier {
         return claims;
     }
 
-    private JwkSet getJwkSet(String jwksUrl) {
+    private Key locateKey(String jwksUrl, String kid) {
+        Key key = findKey(getJwkSet(jwksUrl, false), kid);
+        if (key != null) {
+            return key;
+        }
+        // 캐시에 없는 kid는 provider가 서명 키를 교체했을 수 있다는 뜻이라, TTL 만료를
+        // 기다리지 않고 한 번 강제로 다시 조회해본다(남용 방지를 위해 강제 재조회 자체에도
+        // 최소 간격을 둔다 - getJwkSet의 lastForcedRefreshAt 쿨다운 참고).
+        key = findKey(getJwkSet(jwksUrl, true), kid);
+        if (key != null) {
+            return key;
+        }
+        throw new AuthException(AuthErrorCode.APP_TOKEN_VERIFICATION_FAILED);
+    }
+
+    private Key findKey(JwkSet jwkSet, String kid) {
+        if (kid == null) {
+            return null;
+        }
+        return jwkSet.getKeys().stream()
+                .filter(jwk -> kid.equals(jwk.get("kid")))
+                .findFirst()
+                .map(Jwk::toKey)
+                .orElse(null);
+    }
+
+    private JwkSet getJwkSet(String jwksUrl, boolean forceRefresh) {
         CachedJwkSet cached = jwkSetCache.get(jwksUrl);
-        if (cached != null && cached.isValid()) {
+        if (!forceRefresh && cached != null && cached.isValid()) {
             return cached.jwkSet();
+        }
+
+        if (forceRefresh) {
+            Instant lastForced = lastForcedRefreshAt.get(jwksUrl);
+            boolean coolingDown = lastForced != null
+                    && lastForced.plus(MIN_FORCED_REFRESH_INTERVAL).isAfter(Instant.now());
+            if (coolingDown) {
+                // 알 수 없는 kid로 강제 재조회를 남용하는 걸 막기 위해, 최근에 이미 강제
+                // 재조회했다면 새로 fetch하지 않고 있는 캐시(조금 오래됐어도)를 그대로 쓴다.
+                if (cached != null) {
+                    return cached.jwkSet();
+                }
+            } else {
+                lastForcedRefreshAt.put(jwksUrl, Instant.now());
+            }
         }
 
         JwkSet jwkSet = fetchJwkSet(jwksUrl);

@@ -17,6 +17,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Date;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -136,6 +137,66 @@ class IdTokenVerifierTest {
         }
     }
 
+    @Test
+    void 캐시에_없는_kid는_JWKS를_한_번_강제로_재조회해서_찾는다() throws Exception {
+        // given - provider가 서명 키를 새 kid로 교체한 상황을 흉내낸다.
+        // 처음엔 예전 kid만 담긴 JWKS를 주다가, 두 번째 요청부터는 새 kid를 포함해서 준다.
+        String rotatedKid = "rotated-kid";
+        KeyPair rotatedKeyPair = KeyPairGenerator.getInstance("RSA").generateKeyPair();
+        AtomicInteger requestCount = new AtomicInteger();
+
+        HttpServer rotatingServer = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        rotatingServer.createContext("/keys", exchange -> {
+            String responseBody = requestCount.getAndIncrement() == 0
+                    ? jwks(KID, keyPair)
+                    : jwksWithTwoKeys(KID, keyPair, rotatedKid, rotatedKeyPair);
+            byte[] body = responseBody.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        rotatingServer.start();
+        try {
+            String rotatingUrl = "http://localhost:" + rotatingServer.getAddress().getPort() + "/keys";
+            String idToken = Jwts.builder()
+                    .setHeaderParam("kid", rotatedKid)
+                    .issuer(ISSUER)
+                    .setAudience(AUDIENCE)
+                    .subject("provider-subject-rotated")
+                    .issuedAt(new Date())
+                    .expiration(new Date(System.currentTimeMillis() + 60_000))
+                    .signWith(rotatedKeyPair.getPrivate(), Jwts.SIG.RS256)
+                    .compact();
+
+            // when
+            Claims claims = verifier.verify(rotatingUrl, ISSUERS, AUDIENCE, idToken);
+
+            // then - 첫 조회에선 못 찾고, 강제 재조회(두 번째 요청)에서 찾아야 한다
+            assertThat(claims.getSubject()).isEqualTo("provider-subject-rotated");
+            assertThat(requestCount.get()).isEqualTo(2);
+        } finally {
+            rotatingServer.stop(0);
+        }
+    }
+
+    @Test
+    void 끝까지_없는_kid면_강제_재조회_후에도_검증에_실패한다() {
+        // given - 서명 키 자체가 유효하지 않은(우리 JWKS에 영원히 없는) kid로 서명된 토큰
+        String idToken = Jwts.builder()
+                .setHeaderParam("kid", "never-registered-kid")
+                .issuer(ISSUER)
+                .setAudience(AUDIENCE)
+                .subject("provider-subject-1")
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + 60_000))
+                .signWith(keyPair.getPrivate(), Jwts.SIG.RS256)
+                .compact();
+
+        // when & then
+        assertThatThrownBy(() -> verifier.verify(jwksUrl, ISSUERS, AUDIENCE, idToken))
+                .isInstanceOf(AuthException.class);
+    }
+
     private String signedIdToken(String issuer, String audience, Date expiration) {
         return Jwts.builder()
                 .setHeaderParam("kid", KID)
@@ -150,12 +211,24 @@ class IdTokenVerifierTest {
     }
 
     private String jwks() {
-        RSAPublicKey publicKey = (RSAPublicKey) keyPair.getPublic();
+        return jwks(KID, keyPair);
+    }
+
+    private String jwks(String kid, KeyPair pair) {
+        return "{\"keys\":[" + jwkEntry(kid, pair) + "]}";
+    }
+
+    private String jwksWithTwoKeys(String firstKid, KeyPair firstKeyPair, String secondKid, KeyPair secondKeyPair) {
+        return "{\"keys\":[" + jwkEntry(firstKid, firstKeyPair) + "," + jwkEntry(secondKid, secondKeyPair) + "]}";
+    }
+
+    private String jwkEntry(String kid, KeyPair pair) {
+        RSAPublicKey publicKey = (RSAPublicKey) pair.getPublic();
         String n = encode(publicKey.getModulus());
         String e = encode(publicKey.getPublicExponent());
         return """
-                {"keys":[{"kty":"RSA","kid":"%s","use":"sig","alg":"RS256","n":"%s","e":"%s"}]}
-                """.formatted(KID, n, e);
+                {"kty":"RSA","kid":"%s","use":"sig","alg":"RS256","n":"%s","e":"%s"}
+                """.formatted(kid, n, e).strip();
     }
 
     private String encode(BigInteger value) {
