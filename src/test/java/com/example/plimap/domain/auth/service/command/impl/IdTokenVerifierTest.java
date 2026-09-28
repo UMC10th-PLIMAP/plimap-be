@@ -102,6 +102,40 @@ class IdTokenVerifierTest {
                 .isInstanceOf(AuthException.class);
     }
 
+    @Test
+    void JWKS_서버에_연결할_수_없으면_500이_아니라_AuthException으로_변환된다() {
+        // given - 아무도 듣고 있지 않은 포트라 연결 자체가 실패한다
+        String unreachableUrl = "http://localhost:1/keys";
+        String idToken = signedIdToken(ISSUER, AUDIENCE, new Date(System.currentTimeMillis() + 60_000));
+
+        // when & then
+        assertThatThrownBy(() -> verifier.verify(unreachableUrl, ISSUERS, AUDIENCE, idToken))
+                .isInstanceOf(AuthException.class);
+    }
+
+    @Test
+    void JWKS_응답이_올바른_형식이_아니면_500이_아니라_AuthException으로_변환된다() throws Exception {
+        // given - provider가 장애 등으로 JWKS 대신 엉뚱한 응답(예: HTML 에러 페이지)을 준 상황
+        HttpServer brokenServer = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        brokenServer.createContext("/keys", exchange -> {
+            byte[] body = "<html>service unavailable</html>".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        brokenServer.start();
+        try {
+            String brokenUrl = "http://localhost:" + brokenServer.getAddress().getPort() + "/keys";
+            String idToken = signedIdToken(ISSUER, AUDIENCE, new Date(System.currentTimeMillis() + 60_000));
+
+            // when & then
+            assertThatThrownBy(() -> verifier.verify(brokenUrl, ISSUERS, AUDIENCE, idToken))
+                    .isInstanceOf(AuthException.class);
+        } finally {
+            brokenServer.stop(0);
+        }
+    }
+
     private String signedIdToken(String issuer, String audience, Date expiration) {
         return Jwts.builder()
                 .setHeaderParam("kid", KID)

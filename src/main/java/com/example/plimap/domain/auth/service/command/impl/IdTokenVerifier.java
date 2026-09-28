@@ -11,13 +11,16 @@ import io.jsonwebtoken.ProtectedHeader;
 import io.jsonwebtoken.security.Jwk;
 import io.jsonwebtoken.security.JwkSet;
 import io.jsonwebtoken.security.Jwks;
+import java.net.http.HttpClient;
 import java.security.Key;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 // 구글/애플 ID 토큰(JWT) 서명을 각 provider의 JWKS로 직접 검증한다.
 // nimbus 등 신규 라이브러리 없이, 이미 있는 jjwt(Jwks 파서)만으로 처리한다.
@@ -25,8 +28,10 @@ import org.springframework.web.client.RestClient;
 class IdTokenVerifier {
 
     private static final Duration JWKS_CACHE_TTL = Duration.ofHours(1);
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(2);
+    private static final Duration READ_TIMEOUT = Duration.ofSeconds(5);
 
-    private final RestClient restClient = RestClient.builder().build();
+    private final RestClient restClient = buildRestClient();
     private final ConcurrentHashMap<String, CachedJwkSet> jwkSetCache = new ConcurrentHashMap<>();
 
     Claims verify(String jwksUrl, Set<String> allowedIssuers, String audience, String idToken) {
@@ -72,12 +77,34 @@ class IdTokenVerifier {
             return cached.jwkSet();
         }
 
-        String json = restClient.get().uri(jwksUrl).retrieve().body(String.class);
-        JwkSet jwkSet = Jwks.setParser().build().parse(json);
+        JwkSet jwkSet = fetchJwkSet(jwksUrl);
         // ponytail: 인스턴스 로컬 캐시라 서버가 여러 대면 각자 따로 캐싱한다.
         // 여러 인스턴스로 스케일할 때는 Redis 등 공유 캐시로 교체할 것.
         jwkSetCache.put(jwksUrl, new CachedJwkSet(jwkSet, Instant.now()));
         return jwkSet;
+    }
+
+    private JwkSet fetchJwkSet(String jwksUrl) {
+        try {
+            String json = restClient.get().uri(jwksUrl).retrieve().body(String.class);
+            return Jwks.setParser().build().parse(json);
+        } catch (RestClientException | JwtException exception) {
+            // JWKS 조회/파싱 실패를 그대로 흘려보내면 GlobalExceptionHandler의 일반 예외
+            // 처리로 떨어져 500이 나간다. "앱이 보낸 토큰을 검증하지 못했다"는 동일한 의미로
+            // 묶어서 문서화된 401(AUTH_APP_TOKEN_VERIFICATION_FAILED)로 변환한다.
+            throw new AuthException(AuthErrorCode.APP_TOKEN_VERIFICATION_FAILED, exception);
+        }
+    }
+
+    private static RestClient buildRestClient() {
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(CONNECT_TIMEOUT)
+                .build();
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        requestFactory.setReadTimeout(READ_TIMEOUT);
+        return RestClient.builder()
+                .requestFactory(requestFactory)
+                .build();
     }
 
     private record CachedJwkSet(JwkSet jwkSet, Instant fetchedAt) {
