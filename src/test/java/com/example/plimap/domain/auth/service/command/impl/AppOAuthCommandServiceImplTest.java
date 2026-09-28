@@ -20,8 +20,11 @@ import com.example.plimap.global.external.kakao.KakaoUserApiClient;
 import com.example.plimap.global.external.kakao.KakaoUserInfoResponse;
 import com.example.plimap.global.security.JwtUtil;
 import com.example.plimap.global.security.RefreshTokenService;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -95,5 +98,79 @@ class AppOAuthCommandServiceImplTest {
         assertThat(result.status()).isEqualTo(MemberStatus.SUSPENDED);
         assertThat(result.suspendedUntil()).isNotNull();
         verifyNoInteractions(jwtUtil, refreshTokenService);
+    }
+
+    @Test
+    void 구글_이메일이_검증된_경우에만_이메일을_회원조회에_사용한다() {
+        // given
+        Claims claims = Jwts.claims(Map.of(
+                "sub", "google-subject-verified",
+                "email", "user@gmail.com",
+                "email_verified", true
+        ));
+        when(idTokenVerifier.verify(anyString(), any(), anyString(), eq("verified-token"))).thenReturn(claims);
+
+        Member member = mock(Member.class);
+        when(member.isOnboarded()).thenReturn(true);
+        ArgumentCaptor<OAuthDTO> dtoCaptor = ArgumentCaptor.forClass(OAuthDTO.class);
+        when(customOAuthService.resolveMember(eq(AuthProvider.GOOGLE), dtoCaptor.capture())).thenReturn(member);
+        when(jwtUtil.createAccessToken(any())).thenReturn("access-token");
+        when(jwtUtil.createRefreshToken(any())).thenReturn("refresh-token");
+        when(jwtUtil.getRefreshTokenExpiry()).thenReturn(Duration.ofDays(14));
+
+        // when
+        service.login(new AuthReqDTO.AppLogin(AuthProvider.GOOGLE, "verified-token"));
+
+        // then
+        assertThat(dtoCaptor.getValue().getEmail()).isEqualTo("user@gmail.com");
+    }
+
+    @Test
+    void 구글_이메일이_검증되지_않았으면_이메일을_회원조회에_넘기지_않는다() {
+        // given - email_verified가 false인 이메일은 소유권이 확인되지 않았으므로
+        // AdminEmailPolicy 등 이메일 기반 판단에 잘못 쓰이지 않도록 아예 넘기지 않는다.
+        Claims claims = Jwts.claims(Map.of(
+                "sub", "google-subject-unverified",
+                "email", "unverified@gmail.com",
+                "email_verified", false
+        ));
+        when(idTokenVerifier.verify(anyString(), any(), anyString(), eq("unverified-token"))).thenReturn(claims);
+
+        Member member = mock(Member.class);
+        when(member.isOnboarded()).thenReturn(true);
+        ArgumentCaptor<OAuthDTO> dtoCaptor = ArgumentCaptor.forClass(OAuthDTO.class);
+        when(customOAuthService.resolveMember(eq(AuthProvider.GOOGLE), dtoCaptor.capture())).thenReturn(member);
+        when(jwtUtil.createAccessToken(any())).thenReturn("access-token");
+        when(jwtUtil.createRefreshToken(any())).thenReturn("refresh-token");
+        when(jwtUtil.getRefreshTokenExpiry()).thenReturn(Duration.ofDays(14));
+
+        // when
+        service.login(new AuthReqDTO.AppLogin(AuthProvider.GOOGLE, "unverified-token"));
+
+        // then
+        assertThat(dtoCaptor.getValue().getEmail()).isNull();
+    }
+
+    @Test
+    void 애플_ID_토큰은_email_verified_클레임이_없어도_이메일_없이_로그인된다() {
+        // given - 재로그인 시 Apple은 email/email_verified를 아예 내려주지 않을 수 있다
+        Claims claims = Jwts.claims(Map.of("sub", "apple-subject-1"));
+        when(idTokenVerifier.verify(anyString(), any(), anyString(), eq("apple-token"))).thenReturn(claims);
+
+        Member member = mock(Member.class);
+        when(member.isOnboarded()).thenReturn(true);
+        ArgumentCaptor<OAuthDTO> dtoCaptor = ArgumentCaptor.forClass(OAuthDTO.class);
+        when(customOAuthService.resolveMember(eq(AuthProvider.APPLE), dtoCaptor.capture())).thenReturn(member);
+        when(jwtUtil.createAccessToken(any())).thenReturn("access-token");
+        when(jwtUtil.createRefreshToken(any())).thenReturn("refresh-token");
+        when(jwtUtil.getRefreshTokenExpiry()).thenReturn(Duration.ofDays(14));
+
+        // when
+        AuthResponse.AppLogin result = service.login(new AuthReqDTO.AppLogin(AuthProvider.APPLE, "apple-token"));
+
+        // then
+        assertThat(result.accessToken()).isEqualTo("access-token");
+        assertThat(dtoCaptor.getValue().getProviderSubject()).isEqualTo("apple-subject-1");
+        assertThat(dtoCaptor.getValue().getEmail()).isNull();
     }
 }

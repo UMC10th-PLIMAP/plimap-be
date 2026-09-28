@@ -101,7 +101,7 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
         if (providerSubject == null) {
             throw new MemberException(MemberErrorCode.INVALID_SOCIAL_PROFILE);
         }
-        String email = claims.get("email", String.class);
+        String email = verifiedEmail(claims);
         String name = claims.get("name", String.class);
         return new GoogleDTO(providerSubject, email, name);
     }
@@ -112,7 +112,21 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
         if (providerSubject == null) {
             throw new MemberException(MemberErrorCode.INVALID_SOCIAL_PROFILE);
         }
-        String email = claims.get("email", String.class);
+        String email = verifiedEmail(claims);
         return new AppleDTO(providerSubject, email);
+    }
+
+    // email_verified가 명시적으로 true인 경우에만 email을 사용한다. 이 값은 AdminEmailPolicy의
+    // 관리자 승격 판단에도 쓰이므로, 소유권이 확인되지 않은 이메일로 관리자 이메일을 사칭하는
+    // 토큰이 들어와도 관리자 권한이 부여되지 않도록 막기 위함이다. provider-subject 기반인
+    // 회원 식별 자체에는 영향 없음(이메일이 없어도 신규/기존 회원 판별은 정상 동작).
+    private String verifiedEmail(Claims claims) {
+        Object emailVerified = claims.get("email_verified");
+        boolean verified = switch (emailVerified) {
+            case Boolean bool -> bool;
+            case String str -> Boolean.parseBoolean(str);
+            case null, default -> false;
+        };
+        return verified ? claims.get("email", String.class) : null;
     }
 }
