@@ -90,9 +90,10 @@ public class CustomOAuthService extends DefaultOAuth2UserService {
         return new OAuthMember(member, oAuthUser.getAttributes());
     }
 
-    // AppOAuthCommandServiceImpl(앱 로그인)에서도 재사용하므로 public.
+    // AppOAuthCommandServiceImpl(앱 로그인)에서도 재사용한다 - 같은 패키지라 package-private으로 충분하고,
+    // 토큰 검증 없이 호출 가능한 이 메서드를 다른 패키지에서도 호출 가능하게 넓힐 이유가 없다.
     @Transactional
-    public Member resolveMember(AuthProvider provider, OAuthDTO dto) {
+    Member resolveMember(AuthProvider provider, OAuthDTO dto) {
         Member member = socialAccountRepository
                 .findByProviderAndProviderSubject(provider, dto.getProviderSubject())
                 .map(SocialAccount::getMember)

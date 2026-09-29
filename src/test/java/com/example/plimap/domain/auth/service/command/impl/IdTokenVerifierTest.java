@@ -21,6 +21,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.client.RestClient;
 
 // 실제 Apple/Google JWKS 서버 대신, 로컬에 임시 HTTP 서버를 띄워 같은 형식의 JWKS를 응답하게 하고
 // 자체 생성한 RSA 키쌍으로 서명한 토큰을 검증한다. 외부 네트워크 없이 서명 검증 로직 자체를 확인한다.
@@ -50,7 +51,7 @@ class IdTokenVerifierTest {
         jwksServer.start();
         jwksUrl = "http://localhost:" + jwksServer.getAddress().getPort() + "/keys";
 
-        verifier = new IdTokenVerifier();
+        verifier = new IdTokenVerifier(RestClient.builder().build());
     }
 
     @AfterEach
@@ -176,6 +177,48 @@ class IdTokenVerifierTest {
             assertThat(requestCount.get()).isEqualTo(2);
         } finally {
             rotatingServer.stop(0);
+        }
+    }
+
+    @Test
+    void 강제_재조회_쿨다운_중에는_반복된_미상_kid_요청이_JWKS를_다시_받아오지_않는다() throws Exception {
+        // given - 영원히 등록되지 않는 kid로 두 번 연달아 검증을 시도한다. 첫 verify()에서
+        // (일반 조회 1회 + 강제 재조회 1회 = 2회) JWKS를 받고, 곧바로 이어지는 두 번째
+        // verify()는 쿨다운(60초) 중이라 강제 재조회를 또 하면 안 된다.
+        AtomicInteger requestCount = new AtomicInteger();
+        HttpServer countingServer = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
+        countingServer.createContext("/keys", exchange -> {
+            requestCount.incrementAndGet();
+            byte[] body = jwks().getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        countingServer.start();
+        try {
+            String countingUrl = "http://localhost:" + countingServer.getAddress().getPort() + "/keys";
+            String idToken = Jwts.builder()
+                    .setHeaderParam("kid", "never-registered-kid")
+                    .issuer(ISSUER)
+                    .setAudience(AUDIENCE)
+                    .subject("provider-subject-1")
+                    .issuedAt(new Date())
+                    .expiration(new Date(System.currentTimeMillis() + 60_000))
+                    .signWith(keyPair.getPrivate(), Jwts.SIG.RS256)
+                    .compact();
+
+            // when
+            assertThatThrownBy(() -> verifier.verify(countingUrl, ISSUERS, AUDIENCE, idToken))
+                    .isInstanceOf(AuthException.class);
+            int requestsAfterFirstCall = requestCount.get();
+            assertThatThrownBy(() -> verifier.verify(countingUrl, ISSUERS, AUDIENCE, idToken))
+                    .isInstanceOf(AuthException.class);
+
+            // then
+            assertThat(requestsAfterFirstCall).isEqualTo(2);
+            assertThat(requestCount.get()).isEqualTo(requestsAfterFirstCall);
+        } finally {
+            countingServer.stop(0);
         }
     }
 

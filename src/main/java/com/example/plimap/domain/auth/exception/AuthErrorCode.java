@@ -22,6 +22,11 @@ public enum AuthErrorCode implements BaseErrorCode {
             HttpStatus.UNAUTHORIZED,
             "AUTH_APP_TOKEN_VERIFICATION_FAILED",
             "앱에서 전달한 토큰을 검증하지 못했습니다."
+    ),
+    APP_LOGIN_PROVIDER_TIMEOUT(
+            HttpStatus.GATEWAY_TIMEOUT,
+            "AUTH_APP_LOGIN_PROVIDER_TIMEOUT",
+            "카카오 서버 응답이 지연되어 로그인을 완료하지 못했습니다."
     );
 
     private final HttpStatus status;

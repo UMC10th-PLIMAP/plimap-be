@@ -1,7 +1,5 @@
 package com.example.plimap.global.external.kakao;
 
-import java.net.SocketTimeoutException;
-import java.net.http.HttpTimeoutException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.converter.HttpMessageConversionException;
@@ -32,23 +30,9 @@ public class KakaoUserApiClientImpl implements KakaoUserApiClient {
             }
             return response;
         } catch (ResourceAccessException exception) {
-            if (isTimeout(exception)) {
-                throw new KakaoClientTimeoutException("Kakao User API request timed out", exception);
-            }
-            throw new KakaoClientException("Kakao User API request failed", exception);
+            throw KakaoClientExceptionTranslator.translate("Kakao User API request failed", exception);
         } catch (RestClientException | HttpMessageConversionException exception) {
-            throw new KakaoClientException("Kakao User API request failed", exception);
+            throw KakaoClientExceptionTranslator.translate("Kakao User API request failed", exception);
         }
-    }
-
-    private boolean isTimeout(Throwable exception) {
-        Throwable current = exception;
-        while (current != null) {
-            if (current instanceof SocketTimeoutException || current instanceof HttpTimeoutException) {
-                return true;
-            }
-            current = current.getCause();
-        }
-        return false;
     }
 }

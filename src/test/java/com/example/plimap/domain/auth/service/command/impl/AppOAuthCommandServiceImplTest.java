@@ -50,6 +50,7 @@ class AppOAuthCommandServiceImplTest {
                 12345L,
                 new KakaoUserInfoResponse.KakaoAccount(
                         "user@kakao.com",
+                        true,
                         new KakaoUserInfoResponse.KakaoAccount.Profile("닉네임")
                 )
         );
@@ -79,6 +80,32 @@ class AppOAuthCommandServiceImplTest {
     }
 
     @Test
+    void 카카오_이메일이_검증되지_않았으면_이메일을_회원조회에_넘기지_않는다() {
+        // given - 카카오가 검증했다고 확인해주지 않은 이메일은 구글/애플과 동일하게 소유권이
+        // 확인되지 않은 것으로 취급한다(AdminEmailPolicy 등 이메일 기반 판단에 오용되면 안 됨).
+        KakaoUserInfoResponse response = new KakaoUserInfoResponse(
+                99L,
+                new KakaoUserInfoResponse.KakaoAccount(
+                        "unverified@kakao.com", false, new KakaoUserInfoResponse.KakaoAccount.Profile("닉네임"))
+        );
+        when(kakaoUserApiClient.getUserInfo(anyString())).thenReturn(response);
+
+        Member member = mock(Member.class);
+        when(member.isOnboarded()).thenReturn(true);
+        ArgumentCaptor<OAuthDTO> dtoCaptor = ArgumentCaptor.forClass(OAuthDTO.class);
+        when(customOAuthService.resolveMember(eq(AuthProvider.KAKAO), dtoCaptor.capture())).thenReturn(member);
+        when(jwtUtil.createAccessToken(any())).thenReturn("access-token");
+        when(jwtUtil.createRefreshToken(any())).thenReturn("refresh-token");
+        when(jwtUtil.getRefreshTokenExpiry()).thenReturn(Duration.ofDays(14));
+
+        // when
+        service.login(new AuthReqDTO.AppLogin(AuthProvider.KAKAO, "kakao-access-token"));
+
+        // then
+        assertThat(dtoCaptor.getValue().getEmail()).isNull();
+    }
+
+    @Test
     void 카카오_토큰_검증에_실패하면_500이_아니라_APP_TOKEN_VERIFICATION_FAILED로_변환된다() {
         // given - 만료/위조된 액세스 토큰이면 카카오 유저 API 호출 자체가 401로 실패한다
         when(kakaoUserApiClient.getUserInfo(anyString()))
@@ -94,7 +121,8 @@ class AppOAuthCommandServiceImplTest {
     void 정지된_회원이_로그인하면_토큰_없이_제재_정보만_반환한다() {
         KakaoUserInfoResponse response = new KakaoUserInfoResponse(
                 1L,
-                new KakaoUserInfoResponse.KakaoAccount("a@b.com", new KakaoUserInfoResponse.KakaoAccount.Profile("n"))
+                new KakaoUserInfoResponse.KakaoAccount(
+                        "a@b.com", true, new KakaoUserInfoResponse.KakaoAccount.Profile("n"))
         );
         when(kakaoUserApiClient.getUserInfo(anyString())).thenReturn(response);
 
@@ -187,5 +215,29 @@ class AppOAuthCommandServiceImplTest {
         assertThat(result.accessToken()).isEqualTo("access-token");
         assertThat(dtoCaptor.getValue().getProviderSubject()).isEqualTo("apple-subject-1");
         assertThat(dtoCaptor.getValue().getEmail()).isNull();
+    }
+
+    @Test
+    void 구글_ID_토큰에_sub이_없으면_INVALID_SOCIAL_PROFILE_예외가_발생한다() {
+        // given
+        Claims claims = Jwts.claims(Map.of("email", "user@gmail.com"));
+        when(idTokenVerifier.verify(anyString(), any(), anyString(), eq("no-sub-token"))).thenReturn(claims);
+
+        // when & then
+        assertThatThrownBy(() -> service.login(new AuthReqDTO.AppLogin(AuthProvider.GOOGLE, "no-sub-token")))
+                .isInstanceOf(com.example.plimap.domain.member.exception.MemberException.class);
+        verifyNoInteractions(customOAuthService, jwtUtil, refreshTokenService);
+    }
+
+    @Test
+    void 애플_ID_토큰에_sub이_없으면_INVALID_SOCIAL_PROFILE_예외가_발생한다() {
+        // given
+        Claims claims = Jwts.claims(Map.of());
+        when(idTokenVerifier.verify(anyString(), any(), anyString(), eq("no-sub-token"))).thenReturn(claims);
+
+        // when & then
+        assertThatThrownBy(() -> service.login(new AuthReqDTO.AppLogin(AuthProvider.APPLE, "no-sub-token")))
+                .isInstanceOf(com.example.plimap.domain.member.exception.MemberException.class);
+        verifyNoInteractions(customOAuthService, jwtUtil, refreshTokenService);
     }
 }

@@ -165,6 +165,22 @@ class SecurityIntegrationTest {
     }
 
     @Test
+    void 앱_로그인은_쿠키와_CSRF_헤더_없이도_호출할_수_있다() throws Exception {
+        // given - 앱 로그인은 쿠키가 아닌 JSON 바디로 토큰을 내려주는 흐름이라 CSRF 대상이 아니다.
+        com.example.plimap.domain.auth.dto.response.AuthResponse.AppLogin response =
+                com.example.plimap.domain.auth.dto.response.AuthResponse.AppLogin.of(
+                        "app-access-token", "app-refresh-token", false);
+        when(appOAuthCommandService.login(org.mockito.ArgumentMatchers.any())).thenReturn(response);
+
+        // when, then - 쿠키/X-XSRF-TOKEN 헤더 없이 호출해도 CSRF에 막히지 않고 permitAll로 통과한다
+        mockMvc.perform(post("/api/v1/auth/app/login")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"provider\":\"KAKAO\",\"token\":\"kakao-access-token\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.accessToken").value("app-access-token"));
+    }
+
+    @Test
     void 미인증_요청은_공통_401_응답을_반환한다() throws Exception {
         mockMvc.perform(get(PROTECTED_PATH))
                 .andExpect(status().isUnauthorized())

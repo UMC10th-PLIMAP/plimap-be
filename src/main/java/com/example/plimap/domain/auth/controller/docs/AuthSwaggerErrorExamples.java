@@ -48,6 +48,11 @@ final class AuthSwaggerErrorExamples {
                     + JSON_MESSAGE_SEPARATOR
                     + "앱에서 전달한 토큰을 검증하지 못했습니다."
                     + JSON_SUFFIX;
+    static final String APP_LOGIN_PROVIDER_TIMEOUT =
+            JSON_PREFIX + "AUTH_APP_LOGIN_PROVIDER_TIMEOUT"
+                    + JSON_MESSAGE_SEPARATOR
+                    + "카카오 서버 응답이 지연되어 로그인을 완료하지 못했습니다."
+                    + JSON_SUFFIX;
 
     private AuthSwaggerErrorExamples() {
     }

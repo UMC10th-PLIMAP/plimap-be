@@ -60,6 +60,18 @@ public interface AuthControllerDocs {
                                     summary = "앱 토큰 검증 실패",
                                     value = AuthSwaggerErrorExamples.APP_TOKEN_VERIFICATION_FAILED
                             )
+                    )),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "504",
+                    description = "카카오 서버 응답이 지연되어 로그인을 완료하지 못한 경우",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorApiResponse.class),
+                            examples = @ExampleObject(
+                                    name = "AUTH_APP_LOGIN_PROVIDER_TIMEOUT",
+                                    summary = "provider 응답 지연",
+                                    value = AuthSwaggerErrorExamples.APP_LOGIN_PROVIDER_TIMEOUT
+                            )
                     ))
     })
     @io.swagger.v3.oas.annotations.responses.ApiResponse(

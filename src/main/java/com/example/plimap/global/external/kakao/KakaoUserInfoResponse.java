@@ -9,6 +9,8 @@ public record KakaoUserInfoResponse(
 ) {
     public record KakaoAccount(
             String email,
+            @JsonProperty("is_email_verified")
+            Boolean isEmailVerified,
             Profile profile
     ) {
         public record Profile(

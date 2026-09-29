@@ -103,6 +103,12 @@ kakao:
     connect-timeout: 2s
     read-timeout: 5s
 
+# 구글/애플 JWKS 조회(ID 토큰 서명 검증용) 타임아웃
+oidc:
+  jwks:
+    connect-timeout: 2s
+    read-timeout: 5s
+
 # 앱(네이티브) 로그인의 구글/애플 ID 토큰 검증에 쓰는 aud 값
 # 구글은 웹과 동일한 OAuth 클라이언트를 앱에서도 재사용한다는 전제라 기본값을 웹 client-id로 폴백한다.
 app-oauth:

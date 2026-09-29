@@ -15,6 +15,7 @@ import com.example.plimap.domain.member.entity.Member;
 import com.example.plimap.domain.member.exception.MemberErrorCode;
 import com.example.plimap.domain.member.exception.MemberException;
 import com.example.plimap.global.external.kakao.KakaoClientException;
+import com.example.plimap.global.external.kakao.KakaoClientTimeoutException;
 import com.example.plimap.global.external.kakao.KakaoUserApiClient;
 import com.example.plimap.global.external.kakao.KakaoUserInfoResponse;
 import com.example.plimap.global.security.JwtUtil;
@@ -60,6 +61,9 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
         this.appleAppClientId = appleAppClientId;
     }
 
+    // 의도적으로 @Transactional을 붙이지 않는다: 여기서 직접 하는 일은 JWT 서명(순수 연산)과
+    // RefreshTokenService.save()(Redis)뿐이라 JPA 트랜잭션이 필요 없다. DB 쓰기(회원 조회/생성)는
+    // customOAuthService.resolveMember()가 자체 @Transactional 경계 안에서 전담한다.
     @Override
     public AuthResponse.AppLogin login(AuthReqDTO.AppLogin request) {
         OAuthDTO dto = resolveOAuthDTO(request);
@@ -92,6 +96,9 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
         KakaoUserInfoResponse response;
         try {
             response = kakaoUserApiClient.getUserInfo(accessToken);
+        } catch (KakaoClientTimeoutException exception) {
+            // 카카오 서버 응답 지연은 "토큰이 잘못됐다"와 다른 문제라 별도 코드로 구분한다.
+            throw new AuthException(AuthErrorCode.APP_LOGIN_PROVIDER_TIMEOUT, exception);
         } catch (KakaoClientException exception) {
             // 만료/위조 등 유효하지 않은 액세스 토큰이면 카카오가 401을 내려주는데, 이 경우도
             // "앱이 보낸 토큰을 검증하지 못했다"는 동일한 의미이므로 통일해서 던진다.
@@ -100,9 +107,16 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
         if (response.id() == null || response.kakaoAccount() == null) {
             throw new MemberException(MemberErrorCode.INVALID_SOCIAL_PROFILE);
         }
-        KakaoUserInfoResponse.KakaoAccount.Profile profile = response.kakaoAccount().profile();
-        String nickname = profile != null ? profile.nickname() : null;
-        return new KakaoDTO(String.valueOf(response.id()), response.kakaoAccount().email(), nickname);
+        KakaoUserInfoResponse.KakaoAccount kakaoAccount = response.kakaoAccount();
+        KakaoUserInfoResponse.KakaoAccount.Profile profile = kakaoAccount.profile();
+        // 웹 카카오 로그인(CustomOAuthService)과 동일하게, 닉네임 동의를 안 한 프로필은 거부한다.
+        if (profile == null || profile.nickname() == null) {
+            throw new MemberException(MemberErrorCode.INVALID_SOCIAL_PROFILE);
+        }
+        // 구글/애플과 동일하게, 카카오가 검증했다고 확인해준 이메일만 사용한다(AdminEmailPolicy
+        // 관리자 승격 판단에도 쓰이므로 소유권 미확인 이메일이 그대로 흘러들어가면 안 됨).
+        String email = Boolean.TRUE.equals(kakaoAccount.isEmailVerified()) ? kakaoAccount.email() : null;
+        return new KakaoDTO(String.valueOf(response.id()), email, profile.nickname());
     }
 
     private GoogleDTO toGoogleDTO(String idToken) {
