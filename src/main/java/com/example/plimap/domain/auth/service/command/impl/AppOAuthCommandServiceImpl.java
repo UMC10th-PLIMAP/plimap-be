@@ -12,12 +12,15 @@ import com.example.plimap.domain.auth.exception.AuthException;
 import com.example.plimap.domain.auth.exception.SanctionedMemberAuthenticationException;
 import com.example.plimap.domain.auth.service.command.AppOAuthCommandService;
 import com.example.plimap.domain.member.entity.Member;
+import com.example.plimap.domain.member.enums.MemberStatus;
 import com.example.plimap.domain.member.exception.MemberErrorCode;
 import com.example.plimap.domain.member.exception.MemberException;
+import com.example.plimap.domain.member.repository.MemberRepository;
 import com.example.plimap.global.external.kakao.KakaoClientException;
 import com.example.plimap.global.external.kakao.KakaoClientTimeoutException;
 import com.example.plimap.global.external.kakao.KakaoUserApiClient;
 import com.example.plimap.global.external.kakao.KakaoUserInfoResponse;
+import com.example.plimap.global.security.AppLoginNonceService;
 import com.example.plimap.global.security.JwtUtil;
 import com.example.plimap.global.security.RefreshTokenService;
 import io.jsonwebtoken.Claims;
@@ -40,6 +43,8 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
     private final IdTokenVerifier idTokenVerifier;
     private final JwtUtil jwtUtil;
     private final RefreshTokenService refreshTokenService;
+    private final AppLoginNonceService appLoginNonceService;
+    private final MemberRepository memberRepository;
     private final String googleAppClientId;
     private final String appleAppClientId;
 
@@ -49,6 +54,8 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
             IdTokenVerifier idTokenVerifier,
             JwtUtil jwtUtil,
             RefreshTokenService refreshTokenService,
+            AppLoginNonceService appLoginNonceService,
+            MemberRepository memberRepository,
             @Value("${app-oauth.google.client-id}") String googleAppClientId,
             @Value("${app-oauth.apple.client-id}") String appleAppClientId
     ) {
@@ -57,6 +64,8 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
         this.idTokenVerifier = idTokenVerifier;
         this.jwtUtil = jwtUtil;
         this.refreshTokenService = refreshTokenService;
+        this.appLoginNonceService = appLoginNonceService;
+        this.memberRepository = memberRepository;
         this.googleAppClientId = googleAppClientId;
         this.appleAppClientId = appleAppClientId;
     }
@@ -82,6 +91,42 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
 
         boolean isNewUser = !member.isOnboarded();
         return AuthResponse.AppLogin.of(accessToken, refreshToken, isNewUser);
+    }
+
+    // 웹 로그인의 AuthController.reissue()와 동일한 검증/회전 로직이지만, 쿠키가 아니라
+    // 요청 바디로 refreshToken을 받고 응답도 JSON으로 돌려준다(앱은 쿠키를 쓰지 않으므로).
+    @Override
+    public AuthResponse.AppTokenReissue reissue(AuthReqDTO.AppReissue request) {
+        String refreshToken = request.refreshToken();
+        if (!jwtUtil.isValid(refreshToken) || !jwtUtil.isRefreshToken(refreshToken)) {
+            throw new AuthException(AuthErrorCode.INVALID_REFRESH_TOKEN);
+        }
+
+        Long memberId = jwtUtil.getMemberId(refreshToken);
+        Member member = memberRepository.findByIdAndStatusAndDeletedAtIsNull(memberId, MemberStatus.ACTIVE)
+                .orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
+        AuthMember authMember = new AuthMember(member);
+
+        String newAccessToken = jwtUtil.createAccessToken(authMember);
+        String newRefreshToken = jwtUtil.createRefreshToken(authMember);
+        boolean rotated = refreshTokenService.rotateIfMatches(
+                memberId,
+                jwtUtil.getJti(refreshToken),
+                jwtUtil.getJti(newRefreshToken),
+                jwtUtil.getRefreshTokenExpiry()
+        );
+        if (!rotated) {
+            throw new AuthException(AuthErrorCode.REFRESH_TOKEN_MISMATCH);
+        }
+
+        return new AuthResponse.AppTokenReissue(newAccessToken, newRefreshToken);
+    }
+
+    // Apple 로그인 시도 전에 앱이 미리 받아가는 1회용 nonce. Apple 인증 요청에 그대로 실어
+    // 보내면 ID 토큰의 nonce claim에 담겨 돌아오고, toAppleDTO()가 로그인 시점에 소비한다.
+    @Override
+    public AuthResponse.AppLoginNonce issueNonce() {
+        return new AuthResponse.AppLoginNonce(appLoginNonceService.issue());
     }
 
     private OAuthDTO resolveOAuthDTO(AuthReqDTO.AppLogin request) {
@@ -132,6 +177,13 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
 
     private AppleDTO toAppleDTO(String idToken) {
         Claims claims = idTokenVerifier.verify(APPLE_JWKS_URL, APPLE_ISSUERS, appleAppClientId, idToken);
+        // 정상 서명된 ID 토큰이라도 탈취되면 만료 전까지 재전송(replay)될 수 있으므로, 로그인
+        // 시도마다 서버가 미리 발급한 1회용 nonce가 토큰에 그대로 담겨 왔는지 확인하고 소비한다.
+        // 두 번째로 같은 토큰이 들어오면 nonce가 이미 소비돼 있어 거부된다.
+        String nonce = claims.get("nonce", String.class);
+        if (!appLoginNonceService.consume(nonce)) {
+            throw new AuthException(AuthErrorCode.APP_LOGIN_NONCE_INVALID);
+        }
         String providerSubject = claims.getSubject();
         if (providerSubject == null) {
             throw new MemberException(MemberErrorCode.INVALID_SOCIAL_PROFILE);

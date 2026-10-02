@@ -51,15 +51,22 @@ public interface AuthControllerDocs {
                     )),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "401",
-                    description = "provider 토큰 검증에 실패한 경우",
+                    description = "provider 토큰 검증에 실패했거나(또는 Apple 로그인 시도용 nonce가 유효하지 않은 경우)",
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ErrorApiResponse.class),
-                            examples = @ExampleObject(
-                                    name = "AUTH_APP_TOKEN_VERIFICATION_FAILED",
-                                    summary = "앱 토큰 검증 실패",
-                                    value = AuthSwaggerErrorExamples.APP_TOKEN_VERIFICATION_FAILED
-                            )
+                            examples = {
+                                    @ExampleObject(
+                                            name = "AUTH_APP_TOKEN_VERIFICATION_FAILED",
+                                            summary = "앱 토큰 검증 실패",
+                                            value = AuthSwaggerErrorExamples.APP_TOKEN_VERIFICATION_FAILED
+                                    ),
+                                    @ExampleObject(
+                                            name = "AUTH_APP_LOGIN_NONCE_INVALID",
+                                            summary = "Apple 로그인 시도 nonce 무효/재사용",
+                                            value = AuthSwaggerErrorExamples.APP_LOGIN_NONCE_INVALID
+                                    )
+                            }
                     )),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "504",
@@ -78,6 +85,20 @@ public interface AuthControllerDocs {
             responseCode = "200",
             description = "요청 성공(제재 회원은 토큰 없이 제재 정보만 포함)")
     ApiResponse<AuthResponse.AppLogin> appLogin(AuthReqDTO.AppLogin request);
+
+    @Operation(
+            summary = "앱 로그인 시도용 nonce 발급",
+            description = """
+                    Apple 로그인에서 ID 토큰 재전송(replay) 공격을 막기 위한 1회용 nonce를 발급합니다.
+                    앱은 이 값을 Apple 인증 요청(ASAuthorizationAppleIDRequest.nonce 등)에 그대로 실어 보내고,
+                    돌아온 ID 토큰을 /api/v1/auth/app/login으로 전달하면 서버가 토큰의 nonce claim과 대조해 1회만
+                    소비합니다. 5분 내에 로그인에 사용하지 않으면 만료됩니다.
+                    """
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "200",
+            description = "요청 성공")
+    ApiResponse<AuthResponse.AppLoginNonce> issueAppLoginNonce();
 
     @Operation(
             summary = "CSRF 토큰 발급",
@@ -357,4 +378,50 @@ public interface AuthControllerDocs {
             responseCode = "200",
             description = "요청 성공")
     ApiResponse<Void> reissue(HttpServletRequest request, HttpServletResponse response);
+
+    @Operation(
+            summary = "앱 토큰 재발급",
+            description = """
+                    앱 로그인(POST /api/v1/auth/app/login) 시 JSON으로 받은 refreshToken을 요청 바디로 전달하면
+                    새 accessToken/refreshToken을 JSON으로 반환합니다(Refresh Token Rotation).
+                    쿠키 기반인 웹 재발급(POST /api/v1/auth/reissue)과는 별개의 흐름입니다.
+                    """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "리프레시 토큰이 유효하지 않거나 저장된 토큰과 일치하지 않는 경우",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorApiResponse.class),
+                            examples = {
+                                    @ExampleObject(
+                                            name = "AUTH_INVALID_REFRESH_TOKEN",
+                                            summary = "유효하지 않은 리프레시 토큰",
+                                            value = AuthSwaggerErrorExamples.INVALID_REFRESH_TOKEN
+                                    ),
+                                    @ExampleObject(
+                                            name = "AUTH_REFRESH_TOKEN_MISMATCH",
+                                            summary = "저장된 리프레시 토큰과 불일치",
+                                            value = AuthSwaggerErrorExamples.REFRESH_TOKEN_MISMATCH
+                                    )
+                            }
+                    )),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "활성 회원을 찾을 수 없는 경우",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorApiResponse.class),
+                            examples = @ExampleObject(
+                                    name = "MEMBER_NOT_FOUND",
+                                    summary = "회원 없음",
+                                    value = AuthSwaggerErrorExamples.MEMBER_NOT_FOUND
+                            )
+                    ))
+    })
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "200",
+            description = "요청 성공")
+    ApiResponse<AuthResponse.AppTokenReissue> appReissue(AuthReqDTO.AppReissue request);
 }

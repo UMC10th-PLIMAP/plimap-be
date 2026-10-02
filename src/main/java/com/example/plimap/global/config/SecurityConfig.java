@@ -92,8 +92,9 @@ public class SecurityConfig {
                         .ignoringRequestMatchers(new BearerTokenRequestMatcher())
                         // Swagger UI에서 바로 테스트하는 local/dev 전용 임시 API라 CSRF 토큰 없이도 허용
                         .ignoringRequestMatchers("/api/v1/auth/token/test")
-                        // 앱(네이티브) 로그인은 쿠키가 아닌 JSON 응답으로 토큰을 내려주므로 CSRF 토큰 발급 대상이 아니다.
-                        .ignoringRequestMatchers("/api/v1/auth/app/login")
+                        // 앱(네이티브) 로그인/재발급/nonce 발급은 쿠키가 아닌 JSON으로 주고받으므로
+                        // CSRF 토큰 발급 대상이 아니다.
+                        .ignoringRequestMatchers("/api/v1/auth/app/**")
                 )
                 .cors(withDefaults())
                 .sessionManagement(session ->
@@ -110,7 +111,7 @@ public class SecurityConfig {
                                 "/api/v1/auth/reissue",
                                 "/api/v1/pins/map",
                                 "/api/v1/auth/csrf",
-                                "/api/v1/auth/app/login"
+                                "/api/v1/auth/app/**"
                         ).permitAll()
                         // 문의 등록은 비로그인 사용자도 이용할 수 있어야 하므로 인증 없이 허용한다.
                         .requestMatchers(HttpMethod.POST, "/api/v1/inquiries", "/api/v1/auth/demo").permitAll()

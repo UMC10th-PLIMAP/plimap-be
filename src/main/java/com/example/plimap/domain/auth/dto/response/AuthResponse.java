@@ -46,4 +46,10 @@ public final class AuthResponse {
             );
         }
     }
+
+    public record AppTokenReissue(String accessToken, String refreshToken) {
+    }
+
+    public record AppLoginNonce(String nonce) {
+    }
 }

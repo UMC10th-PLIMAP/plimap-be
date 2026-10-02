@@ -34,7 +34,8 @@ class SwaggerErrorResponsesOpenApiIntegrationTest {
             "delete"
     );
     private static final Set<String> OPERATIONS_WITHOUT_KNOWN_FAILURE_RESPONSE = Set.of(
-            "GET /api/v1/auth/csrf"
+            "GET /api/v1/auth/csrf",
+            "POST /api/v1/auth/app/nonce"
     );
     private static final String ERROR_SCHEMA_REFERENCE =
             "#/components/schemas/ErrorApiResponse";

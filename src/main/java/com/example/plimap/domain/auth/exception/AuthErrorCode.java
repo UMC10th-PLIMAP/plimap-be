@@ -27,6 +27,11 @@ public enum AuthErrorCode implements BaseErrorCode {
             HttpStatus.GATEWAY_TIMEOUT,
             "AUTH_APP_LOGIN_PROVIDER_TIMEOUT",
             "카카오 서버 응답이 지연되어 로그인을 완료하지 못했습니다."
+    ),
+    APP_LOGIN_NONCE_INVALID(
+            HttpStatus.UNAUTHORIZED,
+            "AUTH_APP_LOGIN_NONCE_INVALID",
+            "유효하지 않거나 이미 사용된 로그인 시도입니다. 처음부터 다시 로그인해 주세요."
     );
 
     private final HttpStatus status;

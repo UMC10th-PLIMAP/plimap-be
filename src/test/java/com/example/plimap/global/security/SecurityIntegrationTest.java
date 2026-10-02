@@ -181,6 +181,34 @@ class SecurityIntegrationTest {
     }
 
     @Test
+    void 앱_토큰_재발급은_쿠키와_CSRF_헤더_없이도_호출할_수_있다() throws Exception {
+        // given
+        com.example.plimap.domain.auth.dto.response.AuthResponse.AppTokenReissue response =
+                new com.example.plimap.domain.auth.dto.response.AuthResponse.AppTokenReissue(
+                        "new-access-token", "new-refresh-token");
+        when(appOAuthCommandService.reissue(org.mockito.ArgumentMatchers.any())).thenReturn(response);
+
+        // when, then
+        mockMvc.perform(post("/api/v1/auth/app/reissue")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"app-refresh-token\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.accessToken").value("new-access-token"));
+    }
+
+    @Test
+    void 앱_로그인_nonce_발급은_쿠키와_CSRF_헤더_없이도_호출할_수_있다() throws Exception {
+        // given
+        when(appOAuthCommandService.issueNonce())
+                .thenReturn(new com.example.plimap.domain.auth.dto.response.AuthResponse.AppLoginNonce("issued-nonce"));
+
+        // when, then
+        mockMvc.perform(post("/api/v1/auth/app/nonce"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.nonce").value("issued-nonce"));
+    }
+
+    @Test
     void 미인증_요청은_공통_401_응답을_반환한다() throws Exception {
         mockMvc.perform(get(PROTECTED_PATH))
                 .andExpect(status().isUnauthorized())

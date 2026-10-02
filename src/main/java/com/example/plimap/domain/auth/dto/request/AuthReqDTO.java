@@ -25,4 +25,11 @@ public class AuthReqDTO {
             String token
     ) {
     }
+
+    public record AppReissue(
+            @NotBlank
+            @Schema(description = "앱 로그인 시 JSON 응답으로 받은 refreshToken")
+            String refreshToken
+    ) {
+    }
 }

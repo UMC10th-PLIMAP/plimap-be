@@ -65,6 +65,18 @@ public class AuthController implements AuthControllerDocs {
     }
 
     @Override
+    @PostMapping("/app/reissue")
+    public ApiResponse<AuthResponse.AppTokenReissue> appReissue(@Valid @RequestBody AuthReqDTO.AppReissue request) {
+        return ApiResponse.success(AuthSuccessCode.TOKEN_REISSUED, appOAuthCommandService.reissue(request));
+    }
+
+    @Override
+    @PostMapping("/app/nonce")
+    public ApiResponse<AuthResponse.AppLoginNonce> issueAppLoginNonce() {
+        return ApiResponse.success(AuthSuccessCode.APP_LOGIN_NONCE_ISSUED, appOAuthCommandService.issueNonce());
+    }
+
+    @Override
     @GetMapping("/csrf")
     public ApiResponse<AuthResponse.CsrfToken> getCsrfToken(CsrfToken csrfToken) {
         return ApiResponse.success(
