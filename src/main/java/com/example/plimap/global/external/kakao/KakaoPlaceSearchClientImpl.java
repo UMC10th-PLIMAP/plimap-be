@@ -1,8 +1,6 @@
 package com.example.plimap.global.external.kakao;
 
 import com.example.plimap.global.external.kakao.dto.KakaoPlaceSearchResponse;
-import java.net.SocketTimeoutException;
-import java.net.http.HttpTimeoutException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.converter.HttpMessageConversionException;
@@ -47,27 +45,9 @@ public class KakaoPlaceSearchClientImpl implements KakaoPlaceSearchClient {
             }
             return response;
         } catch (ResourceAccessException exception) {
-            if (isTimeout(exception)) {
-                throw new KakaoClientTimeoutException(
-                        "Kakao Local API request timed out",
-                        exception
-                );
-            }
-            throw new KakaoClientException("Kakao Local API request failed", exception);
+            throw KakaoClientExceptionTranslator.translate("Kakao Local API request failed", exception);
         } catch (RestClientException | HttpMessageConversionException exception) {
-            throw new KakaoClientException("Kakao Local API request failed", exception);
+            throw KakaoClientExceptionTranslator.translate("Kakao Local API request failed", exception);
         }
-    }
-
-    private boolean isTimeout(Throwable exception) {
-        Throwable current = exception;
-        while (current != null) {
-            if (current instanceof SocketTimeoutException
-                    || current instanceof HttpTimeoutException) {
-                return true;
-            }
-            current = current.getCause();
-        }
-        return false;
     }
 }

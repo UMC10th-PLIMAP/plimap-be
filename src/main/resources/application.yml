@@ -97,6 +97,26 @@ kakao:
     rest-api-key: ${KAKAO_REST_API_KEY}
     connect-timeout: 2s
     read-timeout: 5s
+  # 앱 로그인이 전달한 카카오 액세스 토큰을 검증하기 위한 사용자 정보 조회 API
+  user-api:
+    base-url: https://kapi.kakao.com
+    connect-timeout: 2s
+    read-timeout: 5s
+
+# 구글/애플 JWKS 조회(ID 토큰 서명 검증용) 타임아웃
+oidc:
+  jwks:
+    connect-timeout: 2s
+    read-timeout: 5s
+
+# 앱(네이티브) 로그인의 구글/애플 ID 토큰 검증에 쓰는 aud 값
+# 구글은 웹과 동일한 OAuth 클라이언트를 앱에서도 재사용한다는 전제라 기본값을 웹 client-id로 폴백한다.
+app-oauth:
+  google:
+    client-id: ${GOOGLE_APP_CLIENT_ID:${spring.security.oauth2.client.registration.google.client-id}}
+  apple:
+    # kr.plimap.app: iOS 앱 Bundle ID(=Apple 로그인 aud 값). 비밀값이 아니라 공개 식별자라 기본값으로 고정.
+    client-id: ${APPLE_APP_CLIENT_ID:kr.plimap.app}
 
 # iTunes Search API 설정
 itunes:

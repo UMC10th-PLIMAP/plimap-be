@@ -2,6 +2,7 @@ package com.example.plimap.global.security;
 
 import com.example.plimap.domain.auth.controller.AuthController;
 import com.example.plimap.domain.auth.controller.DemoAuthController;
+import com.example.plimap.domain.auth.service.command.AppOAuthCommandService;
 import com.example.plimap.domain.auth.service.command.DemoAuthCommandService;
 import java.time.Duration;
 import com.example.plimap.domain.auth.service.command.impl.CustomOAuthService;
@@ -117,6 +118,9 @@ class SecurityIntegrationTest {
     @MockitoBean
     private DemoAuthCommandService demoAuthCommandService;
 
+    @MockitoBean
+    private AppOAuthCommandService appOAuthCommandService;
+
     @BeforeEach
     void setUp() {
         Member member = Member.builder().build();
@@ -158,6 +162,50 @@ class SecurityIntegrationTest {
         // given, when, then
         mockMvc.perform(post("/api/v1/auth/demo")).andExpect(status().isForbidden());
         org.mockito.Mockito.verifyNoInteractions(demoAuthCommandService);
+    }
+
+    @Test
+    void 앱_로그인은_쿠키와_CSRF_헤더_없이도_호출할_수_있다() throws Exception {
+        // given - 앱 로그인은 쿠키가 아닌 JSON 바디로 토큰을 내려주는 흐름이라 CSRF 대상이 아니다.
+        com.example.plimap.domain.auth.dto.response.AuthResponse.AppLogin response =
+                com.example.plimap.domain.auth.dto.response.AuthResponse.AppLogin.of(
+                        "app-access-token", "app-refresh-token", false);
+        when(appOAuthCommandService.login(org.mockito.ArgumentMatchers.any())).thenReturn(response);
+
+        // when, then - 쿠키/X-XSRF-TOKEN 헤더 없이 호출해도 CSRF에 막히지 않고 permitAll로 통과한다
+        mockMvc.perform(post("/api/v1/auth/app/login")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"provider\":\"KAKAO\",\"token\":\"kakao-access-token\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.accessToken").value("app-access-token"));
+    }
+
+    @Test
+    void 앱_토큰_재발급은_쿠키와_CSRF_헤더_없이도_호출할_수_있다() throws Exception {
+        // given
+        com.example.plimap.domain.auth.dto.response.AuthResponse.AppTokenReissue response =
+                new com.example.plimap.domain.auth.dto.response.AuthResponse.AppTokenReissue(
+                        "new-access-token", "new-refresh-token");
+        when(appOAuthCommandService.reissue(org.mockito.ArgumentMatchers.any())).thenReturn(response);
+
+        // when, then
+        mockMvc.perform(post("/api/v1/auth/app/reissue")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"app-refresh-token\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.accessToken").value("new-access-token"));
+    }
+
+    @Test
+    void 앱_로그인_nonce_발급은_쿠키와_CSRF_헤더_없이도_호출할_수_있다() throws Exception {
+        // given
+        when(appOAuthCommandService.issueNonce())
+                .thenReturn(new com.example.plimap.domain.auth.dto.response.AuthResponse.AppLoginNonce("issued-nonce"));
+
+        // when, then
+        mockMvc.perform(post("/api/v1/auth/app/nonce"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.nonce").value("issued-nonce"));
     }
 
     @Test

@@ -43,6 +43,21 @@ final class AuthSwaggerErrorExamples {
     static final String DEMO_LOGIN_UNAVAILABLE =
             JSON_PREFIX + "AUTH_DEMO_LOGIN_UNAVAILABLE"
                     + JSON_MESSAGE_SEPARATOR + "지금은 로그인 없이 사용해보기를 이용할 수 없습니다." + JSON_SUFFIX;
+    static final String APP_TOKEN_VERIFICATION_FAILED =
+            JSON_PREFIX + "AUTH_APP_TOKEN_VERIFICATION_FAILED"
+                    + JSON_MESSAGE_SEPARATOR
+                    + "앱에서 전달한 토큰을 검증하지 못했습니다."
+                    + JSON_SUFFIX;
+    static final String APP_LOGIN_PROVIDER_TIMEOUT =
+            JSON_PREFIX + "AUTH_APP_LOGIN_PROVIDER_TIMEOUT"
+                    + JSON_MESSAGE_SEPARATOR
+                    + "카카오 서버 응답이 지연되어 로그인을 완료하지 못했습니다."
+                    + JSON_SUFFIX;
+    static final String APP_LOGIN_NONCE_INVALID =
+            JSON_PREFIX + "AUTH_APP_LOGIN_NONCE_INVALID"
+                    + JSON_MESSAGE_SEPARATOR
+                    + "유효하지 않거나 이미 사용된 로그인 시도입니다. 처음부터 다시 로그인해 주세요."
+                    + JSON_SUFFIX;
 
     private AuthSwaggerErrorExamples() {
     }
