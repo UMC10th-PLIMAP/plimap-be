@@ -31,7 +31,7 @@ public class KakaoPlaceSearchClientImpl implements KakaoPlaceSearchClient {
                             .queryParam("query", keyword)
                             .queryParam("x", longitude)
                             .queryParam("y", latitude)
-                            .queryParam("sort", "distance")
+                            .queryParam("sort", "accuracy")
                             .build())
                     .header(
                             HttpHeaders.AUTHORIZATION,
