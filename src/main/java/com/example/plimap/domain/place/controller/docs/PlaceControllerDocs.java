@@ -324,7 +324,8 @@ public interface PlaceControllerDocs {
     @Operation(
             summary = "장소 검색",
             description = "Kakao Local REST API로 주소를 먼저 검색하고, 주소 결과가 없으면 "
-                    + "키워드와 현재 위치를 기준으로 장소를 검색합니다. "
+                    + "키워드 검색 결과를 Kakao 정확도순으로 반환합니다. 현재 위치는 "
+                    + "결과별 거리 계산에 사용하며 검색 반경을 제한하지 않습니다. "
                     + "검색 결과는 저장하지 않습니다. "
                     + "(Figma 기준 화면: MP-02-01, MP-02-01-b, PN-02-01, PN-02-01-b)"
     )
