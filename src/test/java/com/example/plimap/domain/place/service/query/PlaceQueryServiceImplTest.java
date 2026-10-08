@@ -652,6 +652,35 @@ class PlaceQueryServiceImplTest {
     }
 
     @Test
+    void 키워드_검색_결과는_거리와_무관하게_Kakao_응답_순서를_유지한다() {
+        when(kakaoPlaceSearchClient.search("강남역", 37.5283, 126.9326))
+                .thenReturn(new KakaoPlaceSearchResponse(List.of(
+                        new KakaoPlaceSearchResponse.Document(
+                                "station", "강남역", "교통 > 지하철역", "서울 강남구 역삼동",
+                                "서울 강남구 강남대로", "127.0", "37.5", "2000"
+                        ),
+                        new KakaoPlaceSearchResponse.Document(
+                                "restaurant", "강남역 음식점", "음식점", "서울 강남구 역삼동",
+                                "서울 강남구 테헤란로", "127.1", "37.5", "100"
+                        )
+                )));
+        when(placeRepository.findAllByPlaceProviderAndProviderPlaceIdInAndDeletedAtIsNull(
+                "KAKAO", List.of("station", "restaurant")
+        )).thenReturn(List.of());
+
+        PlaceResponse.SearchResult result = placeQueryService.searchPlaces(
+                new PlaceRequest.Search("강남역", 37.5283, 126.9326)
+        );
+
+        assertThat(result.items())
+                .extracting(PlaceResponse.SearchItem::placeName)
+                .containsExactly("강남역", "강남역 음식점");
+        assertThat(result.items())
+                .extracting(PlaceResponse.SearchItem::distanceMeters)
+                .containsExactly(2000, 100);
+    }
+
+    @Test
     void 주소와_키워드_결과가_모두_없으면_빈_items를_반환한다() {
         when(kakaoPlaceSearchClient.search("없는 장소", 37.5283, 126.9326))
                 .thenReturn(new KakaoPlaceSearchResponse(List.of()));
