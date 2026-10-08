@@ -46,6 +46,18 @@ class SwaggerErrorResponsesOpenApiIntegrationTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
+    void 데모_로그인_API는_제거되고_앱_인증_API는_유지된다() throws Exception {
+        // given
+        JsonNode paths = fetchOpenApi().path("paths");
+
+        // when, then
+        assertThat(paths.has("/api/v1/auth/demo")).isFalse();
+        assertThat(paths.path("/api/v1/auth/app/login").has("post")).isTrue();
+        assertThat(paths.path("/api/v1/auth/app/reissue").has("post")).isTrue();
+        assertThat(paths.path("/api/v1/auth/app/nonce").has("post")).isTrue();
+    }
+
+    @Test
     void 모든_API의_실패_응답은_공통_스키마와_named_example을_노출한다() throws Exception {
         JsonNode openApi = fetchOpenApi();
 
@@ -91,19 +103,6 @@ class SwaggerErrorResponsesOpenApiIntegrationTest {
                 }
             }
         }
-    }
-
-    @Test
-    void 데모_로그인은_회원_ID나_Bearer_인증_입력_없이_문서화한다() throws Exception {
-        // given, when
-        JsonNode operation = fetchOpenApi().path("paths").path("/api/v1/auth/demo").path("post");
-
-        // then
-        assertThat(operation.isMissingNode()).isFalse();
-        assertThat(operation.path("requestBody").isMissingNode()).isTrue();
-        assertThat(operation.path("parameters").isMissingNode()).isTrue();
-        assertThat(operation.path("security").isArray()).isTrue();
-        assertThat(operation.path("security").isEmpty()).isTrue();
     }
 
     private JsonNode fetchOpenApi() throws Exception {
