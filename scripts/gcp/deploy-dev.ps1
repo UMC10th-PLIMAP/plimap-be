@@ -8,19 +8,11 @@ param(
     [string]$FrontendRedirectUri = "",
     [string]$CorsAllowedOrigins = "",
     [string]$OAuthAllowedFrontendOrigins = "",
-    [ValidateSet("true", "false")]
-    [string]$DemoEnabled = "false",
-    [ValidateRange(0, [long]::MaxValue)]
-    [long]$DemoMemberId = 0,
     [string]$ProfileImageBucket = "profile-images"
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
-
-if ($DemoEnabled -eq "true" -and $DemoMemberId -le 0) {
-    throw "DemoMemberId must be a positive member ID when demo login is enabled."
-}
 
 $runtimeServiceAccount = "plimap-api-dev@$ProjectId.iam.gserviceaccount.com"
 $secretMap = [ordered]@{
@@ -239,15 +231,11 @@ function Write-EnvironmentFile {
         [Parameter(Mandatory)][string]$FrontendRedirectUri,
         [Parameter(Mandatory)][string]$CorsAllowedOrigins,
         [Parameter(Mandatory)][string]$OAuthAllowedFrontendOrigins,
-        [Parameter(Mandatory)][string]$ProfileImageBucket,
-        [string]$DemoEnabled = "false",
-        [long]$DemoMemberId = 0
+        [Parameter(Mandatory)][string]$ProfileImageBucket
     )
 
     $lines = @(
         "SPRING_PROFILES_ACTIVE: 'dev'",
-        "AUTH_DEMO_ENABLED: $(ConvertTo-YamlSingleQuoted $DemoEnabled.ToLowerInvariant())",
-        "AUTH_DEMO_MEMBER_ID: '$DemoMemberId'",
         "PUBLIC_BASE_URL: $(ConvertTo-YamlSingleQuoted $PublicOrigin)",
         "CORS_ALLOWED_ORIGINS: $(ConvertTo-YamlSingleQuoted $CorsAllowedOrigins)",
         "OAUTH_REDIRECT_URI: $(ConvertTo-YamlSingleQuoted $FrontendRedirectUri)",
@@ -313,9 +301,7 @@ try {
         -FrontendRedirectUri $frontendRedirectUrl `
         -CorsAllowedOrigins $corsOrigins `
         -OAuthAllowedFrontendOrigins $oauthFrontendOrigins `
-        -ProfileImageBucket $ProfileImageBucket `
-        -DemoEnabled $DemoEnabled `
-        -DemoMemberId $DemoMemberId
+        -ProfileImageBucket $ProfileImageBucket
 
     $secretBindings = ($secretMap.GetEnumerator() | ForEach-Object {
         "$($_.Key)=$($_.Value):latest"
