@@ -7,6 +7,7 @@ import com.example.plimap.domain.member.enums.MemberStatus;
 import com.example.plimap.domain.member.entity.Member;
 import com.example.plimap.domain.member.exception.MemberErrorCode;
 import com.example.plimap.domain.member.exception.MemberException;
+import com.example.plimap.domain.auth.service.command.AppOAuthCommandService;
 import com.example.plimap.domain.member.repository.MemberRepository;
 import com.example.plimap.domain.member.service.command.MemberCommandService;
 import com.example.plimap.domain.member.service.command.TermsCommandService;
@@ -39,6 +40,7 @@ class AuthControllerTest {
     private final RefreshTokenService refreshTokenService = mock(RefreshTokenService.class);
     private final SessionInvalidationService sessionInvalidationService = mock(SessionInvalidationService.class);
     private final AuthCookieUtil authCookieUtil = mock(AuthCookieUtil.class);
+    private final AppOAuthCommandService appOAuthCommandService = mock(AppOAuthCommandService.class);
 
     private final AuthController controller = new AuthController(
             mock(MemberCommandService.class),
@@ -48,7 +50,8 @@ class AuthControllerTest {
             jwtUtil,
             refreshTokenService,
             authCookieUtil,
-            sessionInvalidationService
+            sessionInvalidationService,
+            appOAuthCommandService
     );
 
     @Test

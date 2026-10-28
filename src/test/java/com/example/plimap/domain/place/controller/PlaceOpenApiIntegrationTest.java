@@ -242,7 +242,10 @@ class PlaceOpenApiIntegrationTest {
                 .path("get")
                 .path("description")
                 .asText();
-        assertThat(description).contains("주소를 먼저 검색");
+        assertThat(description)
+                .contains("주소를 먼저 검색")
+                .contains("정확도순")
+                .contains("거리 계산");
 
         JsonNode searchItemSchema = findSearchItemSchema(openApi);
         JsonNode properties = searchItemSchema.path("properties");

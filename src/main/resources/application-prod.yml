@@ -41,3 +41,15 @@ springdoc:
     enabled: ${SWAGGER_ENABLED:false}
   swagger-ui:
     enabled: ${SWAGGER_ENABLED:false}
+
+logging:
+  structured:
+    format:
+      console: logstash
+    json:
+      customizer: com.example.plimap.global.config.GoogleCloudSeverityJsonMembersCustomizer
+      rename:
+        level: severity
+        '@timestamp': time
+      add:
+        environment: prod

@@ -146,6 +146,21 @@ Prod Secret은 Dev와 별도 ID와 값을 사용합니다. `deploy-prod.ps1`은 
 
 Prod에는 Dev 테스트 토큰 Secret과 Supabase Secret을 주입하지 않습니다. GCS 인증은 `plimap-api-prod@plimap.iam.gserviceaccount.com`의 Application Default Credentials를 사용합니다.
 
+### Prod 5xx Discord Webhook
+
+5xx 알림용 Cloud Run Function은 애플리케이션 Secret과 별도로 다음 Secret을 사용합니다.
+
+| Function 환경변수 | Secret Manager ID |
+| --- | --- |
+| `DISCORD_WEBHOOK_URL` | `plimap-prod-discord-webhook-url` |
+
+운영자가 Discord `#백엔드-서버에서-알림` 채널에서 Webhook을 만든 뒤 GCP Console의
+Secret Manager에 Secret과 첫 ENABLED 버전을 생성합니다. 실제 Webhook URL은 저장소,
+문서, 이슈, 채팅 또는 PowerShell 명령행에 남기지 않습니다.
+`configure-prod-5xx-discord-alert.ps1`은 Secret ID와 ENABLED 버전의 존재만 확인하고
+payload를 읽거나 출력하지 않습니다. Function에는 `latest` Secret 참조로 주입하므로
+Secret 교체 후 Function을 다시 배포해야 새 revision이 값을 사용합니다.
+
 ## Prod 연결 정보 형식
 
 ### Cloud SQL PostgreSQL/PostGIS

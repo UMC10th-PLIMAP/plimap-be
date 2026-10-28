@@ -1,8 +1,5 @@
 package com.example.plimap.global.config;
 
-import com.example.plimap.domain.auth.config.DemoAuthConfig;
-import com.example.plimap.domain.auth.config.DemoAuthProperties;
-import com.example.plimap.domain.auth.demo.DemoAccountProtectionFilter;
 import com.example.plimap.domain.auth.service.command.impl.CustomOAuthService;
 import com.example.plimap.domain.auth.service.command.impl.OAuthFailureHandler;
 import com.example.plimap.domain.auth.service.command.impl.OAuthSuccessHandler;
@@ -35,7 +32,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
-import tools.jackson.databind.ObjectMapper;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 
@@ -43,7 +39,6 @@ import static org.springframework.security.config.Customizer.withDefaults;
 @EnableWebSecurity
 @EnableConfigurationProperties(OAuthProperties.class)
 @Import({
-        DemoAuthConfig.class,
         AuthCookieUtil.class,
         OAuthFrontendRedirectCookieRepository.class
 })
@@ -78,8 +73,6 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(
             HttpSecurity http,
-            DemoAuthProperties demoAuthProperties,
-            ObjectMapper objectMapper,
             HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository,
             OAuthFrontendRedirectCookieRepository oAuthFrontendRedirectCookieRepository
     ) throws Exception {
@@ -92,6 +85,9 @@ public class SecurityConfig {
                         .ignoringRequestMatchers(new BearerTokenRequestMatcher())
                         // Swagger UI에서 바로 테스트하는 local/dev 전용 임시 API라 CSRF 토큰 없이도 허용
                         .ignoringRequestMatchers("/api/v1/auth/token/test")
+                        // 앱(네이티브) 로그인/재발급/nonce 발급은 쿠키가 아닌 JSON으로 주고받으므로
+                        // CSRF 토큰 발급 대상이 아니다.
+                        .ignoringRequestMatchers("/api/v1/auth/app/**")
                 )
                 .cors(withDefaults())
                 .sessionManagement(session ->
@@ -107,10 +103,11 @@ public class SecurityConfig {
                                 "/api/v1/auth/token/test",
                                 "/api/v1/auth/reissue",
                                 "/api/v1/pins/map",
-                                "/api/v1/auth/csrf"
+                                "/api/v1/auth/csrf",
+                                "/api/v1/auth/app/**"
                         ).permitAll()
                         // 문의 등록은 비로그인 사용자도 이용할 수 있어야 하므로 인증 없이 허용한다.
-                        .requestMatchers(HttpMethod.POST, "/api/v1/inquiries", "/api/v1/auth/demo").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/inquiries").permitAll()
                         .requestMatchers("/api/v1/admin/**").hasAuthority("ADMIN")
                         .anyRequest().authenticated()
                 )
@@ -139,10 +136,6 @@ public class SecurityConfig {
                 .addFilterBefore(
                         new JwtAuthFilter(jwtUtil, memberRepository, tokenBlacklistService),
                         UsernamePasswordAuthenticationFilter.class
-                )
-                .addFilterAfter(
-                        new DemoAccountProtectionFilter(demoAuthProperties, objectMapper),
-                        JwtAuthFilter.class
                 );
 
         return http.build();

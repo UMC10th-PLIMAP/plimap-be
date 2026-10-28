@@ -42,7 +42,7 @@ class KakaoPlaceSearchClientImplTest {
     }
 
     @Test
-    void 카카오_장소_검색에_인증과_위치_파라미터를_전달한다() {
+    void 카카오_장소_검색에_인증과_위치_정확도순_파라미터를_전달한다() {
         server.expect(once(), request -> {
                     var parameters = UriComponentsBuilder.fromUri(request.getURI())
                             .build()
@@ -57,7 +57,7 @@ class KakaoPlaceSearchClientImplTest {
                     )).isEqualTo("여의도 한강공원");
                     assertThat(parameters.getFirst("x")).isEqualTo("126.9326");
                     assertThat(parameters.getFirst("y")).isEqualTo("37.5283");
-                    assertThat(parameters.getFirst("sort")).isEqualTo("distance");
+                    assertThat(parameters.getFirst("sort")).isEqualTo("accuracy");
                     assertThat(parameters).doesNotContainKeys("radius", "rect");
                 })
                 .andExpect(method(HttpMethod.GET))
