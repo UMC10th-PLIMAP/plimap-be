@@ -108,6 +108,10 @@ com.example.plimap/
 
 장소, 위치, 검색 기록과 북마크 관련 기능을 담당합니다.
 
+`PlaceQueryService`는 Controller와 PIN·Track·Place Command가 사용하는 공개 조회 계약입니다.
+구현체는 이 계약을 유지하면서 장소 검색을 `PlaceSearchQueryService`, 인기 장소 조회를
+`PopularPlaceQueryService`에 위임합니다. 상세·북마크·최근 검색 조회는 기존 구현체에 남겨 둡니다.
+
 ### 4. Track
 
 음악과 장소별 곡 관련 기능을 담당합니다.
