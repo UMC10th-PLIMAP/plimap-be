@@ -2,6 +2,7 @@ package com.example.plimap.global.external.apple;
 
 import com.example.plimap.global.external.oidc.OidcTokenResponse;
 import com.example.plimap.global.external.oidc.SocialAuthClientException;
+import com.example.plimap.global.external.oidc.SocialAuthRejectedException;
 import io.jsonwebtoken.Jwts;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
@@ -50,10 +51,15 @@ public class AppleAuthClientImpl implements AppleAuthClient {
                     .body(form)
                     .retrieve()
                     .body(OidcTokenResponse.class);
-            if (response == null || response.refreshToken() == null) {
-                throw new SocialAuthClientException("Apple token API returned no refresh token");
+            if (response == null || response.idToken() == null) {
+                throw new SocialAuthClientException("Apple token API returned no ID token");
             }
             return response;
+        } catch (HttpClientErrorException exception) {
+            if (SocialAuthRejectedException.isRejection(exception)) {
+                throw new SocialAuthRejectedException("Apple rejected the authorization code", exception);
+            }
+            throw new SocialAuthClientException("Apple token API request failed", exception);
         } catch (RestClientException | HttpMessageConversionException exception) {
             throw new SocialAuthClientException("Apple token API request failed", exception);
         }
@@ -73,7 +79,10 @@ public class AppleAuthClientImpl implements AppleAuthClient {
                     .toBodilessEntity();
             return true;
         } catch (HttpClientErrorException exception) {
-            return false;
+            if (SocialAuthRejectedException.isRejection(exception)) {
+                return false;
+            }
+            throw new SocialAuthClientException("Apple revoke API rejected the request", exception);
         } catch (RestClientException exception) {
             throw new SocialAuthClientException("Apple revoke API request failed", exception);
         }

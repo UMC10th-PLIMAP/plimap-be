@@ -670,7 +670,6 @@ class MemberCommandServiceImplTest {
                 .isInstanceOfSatisfying(AuthException.class, exception ->
                         assertThat(exception.getErrorCode()).isEqualTo(AuthErrorCode.APPLE_REAUTH_REQUIRED));
 
-        assertThat(member.getStatus()).isEqualTo(MemberStatus.ACTIVE);
         verify(socialAccountCommandService, never()).deleteByMemberId(any());
         verify(eventPublisher, never()).publishEvent(any());
     }
@@ -708,6 +707,8 @@ class MemberCommandServiceImplTest {
                 .isInstanceOfSatisfying(MemberException.class, exception ->
                         assertThat(exception.getErrorCode()).isEqualTo(MemberErrorCode.NICKNAME_DUPLICATE));
 
+        // 닉네임 충돌은 소셜 연결을 끊기 전에 걸러져, provider 쪽 연결만 끊긴 채 남지 않는다.
+        verify(socialAccountCommandService, never()).unlink(any(), any());
         verify(eventPublisher, never()).publishEvent(any());
     }
 

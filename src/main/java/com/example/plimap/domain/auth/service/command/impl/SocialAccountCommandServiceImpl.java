@@ -13,6 +13,7 @@ import com.example.plimap.global.external.kakao.KakaoClientException;
 import com.example.plimap.global.external.kakao.KakaoUserApiClient;
 import com.example.plimap.global.external.oidc.OidcTokenResponse;
 import com.example.plimap.global.external.oidc.SocialAuthClientException;
+import com.example.plimap.global.external.oidc.SocialAuthRejectedException;
 import com.example.plimap.global.security.SocialTokenCipher;
 import io.jsonwebtoken.Claims;
 import lombok.extern.slf4j.Slf4j;
@@ -62,12 +63,17 @@ public class SocialAccountCommandServiceImpl implements SocialAccountCommandServ
     // 외부 API 호출 동안 DB 커넥션을 잡지 않도록 트랜잭션 없이 교환한 뒤 save()로 반영한다.
     @Override
     public void saveRefreshTokenByCode(Long memberId, AuthProvider provider, String authorizationCode) {
-        SocialAccount account = socialAccountRepository.findFirstByMember_Id(memberId).orElse(null);
-        if (account == null || account.getProvider() != provider) {
-            return;
-        }
         try {
-            String refreshToken = exchangeForAccount(account, authorizationCode);
+            SocialAccount account = socialAccountRepository.findFirstByMember_Id(memberId).orElse(null);
+            if (account == null || account.getProvider() != provider) {
+                return;
+            }
+            String refreshToken = exchangeForAccount(account, authorizationCode).refreshToken();
+            if (refreshToken == null) {
+                // 구글은 이미 동의한 계정이면 refresh token을 다시 주지 않는다. 탈퇴 시 재로그인 경로로 보완한다.
+                log.warn("소셜 refresh token 미발급 memberId={}, provider={}", memberId, provider);
+                return;
+            }
             account.updateEncryptedRefreshToken(socialTokenCipher.encrypt(refreshToken));
             socialAccountRepository.save(account);
         } catch (RuntimeException exception) {
@@ -122,9 +128,18 @@ public class SocialAccountCommandServiceImpl implements SocialAccountCommandServ
         }
     }
 
+    // 복호화하지 못하면(암호화 키 교체 등) 토큰이 없는 것과 같이 재로그인 경로로 보낸다.
     private String storedRefreshToken(SocialAccount account) {
         String encrypted = account.getEncryptedRefreshToken();
-        return encrypted == null ? null : socialTokenCipher.decrypt(encrypted);
+        if (encrypted == null) {
+            return null;
+        }
+        try {
+            return socialTokenCipher.decrypt(encrypted);
+        } catch (RuntimeException exception) {
+            log.warn("소셜 refresh token 복호화 실패 socialAccountId={}", account.getId(), exception);
+            return null;
+        }
     }
 
     private boolean revoke(AuthProvider provider, String refreshToken) {
@@ -137,18 +152,25 @@ public class SocialAccountCommandServiceImpl implements SocialAccountCommandServ
         }
     }
 
-    // 재로그인 code가 잘못됐거나 다른 계정의 것이면 다시 재로그인을 요청한다.
+    // 재로그인 code가 거부됐거나 다른 계정의 것이면 다시 재로그인을 요청하고, 네트워크·서버·설정 오류는
+    // 재로그인으로 해결되지 않으므로 재시도 안내(502)로 응답한다.
+    // 구글은 이미 동의한 계정이면 refresh token이 없을 수 있는데, access token으로 revoke해도 앱 권한
+    // 전체가 해제되므로 그 값을 쓴다.
     private String exchangeForReauth(SocialAccount account, String reauthCode) {
+        OidcTokenResponse response;
         try {
-            return exchangeForAccount(account, reauthCode);
-        } catch (SocialAuthClientException | AuthException exception) {
+            response = exchangeForAccount(account, reauthCode);
+        } catch (SocialAuthRejectedException | AuthException exception) {
             throw reauthRequired(account.getProvider());
+        } catch (SocialAuthClientException exception) {
+            throw new AuthException(AuthErrorCode.SOCIAL_UNLINK_FAILED, exception);
         }
+        return response.refreshToken() != null ? response.refreshToken() : response.accessToken();
     }
 
     // code를 교환한 뒤 함께 받은 ID 토큰의 sub가 이 계정과 같은지 확인한다. 다른 계정의 토큰을
     // 저장하거나 끊지 않기 위함이다.
-    private String exchangeForAccount(SocialAccount account, String code) {
+    private OidcTokenResponse exchangeForAccount(SocialAccount account, String code) {
         boolean apple = account.getProvider() == AuthProvider.APPLE;
         OidcTokenResponse response = apple ? appleAuthClient.exchangeCode(code) : googleAuthClient.exchangeCode(code);
         Claims claims = apple
@@ -159,7 +181,7 @@ public class SocialAccountCommandServiceImpl implements SocialAccountCommandServ
         if (!account.getProviderSubject().equals(claims.getSubject())) {
             throw new AuthException(AuthErrorCode.APP_TOKEN_VERIFICATION_FAILED);
         }
-        return response.refreshToken();
+        return response;
     }
 
     private static AuthException reauthRequired(AuthProvider provider) {

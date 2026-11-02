@@ -26,6 +26,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -158,6 +159,29 @@ class OAuthSuccessHandlerTest {
         handler.onAuthenticationSuccess(request, response, authentication);
 
         verify(socialAccountCommandService).saveRefreshToken(1L, "google-refresh-token");
+        verify(authorizedClientRepository).removeAuthorizedClient("google", authentication, request, response);
+    }
+
+    @Test
+    void 웹_구글_refresh_token_저장에_실패해도_로그인_리다이렉트는_정상_진행된다() throws Exception {
+        setUpTokenMocks();
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        Member member = mock(Member.class);
+        when(member.getId()).thenReturn(1L);
+        when(member.isOnboarded()).thenReturn(true);
+        OAuth2AuthenticationToken authentication = mock(OAuth2AuthenticationToken.class);
+        when(authentication.getPrincipal()).thenReturn(new OAuthMember(member, Collections.emptyMap()));
+        when(authentication.getAuthorizedClientRegistrationId()).thenReturn("google");
+        OAuth2AuthorizedClient client = mock(OAuth2AuthorizedClient.class);
+        when(client.getRefreshToken()).thenReturn(new OAuth2RefreshToken("google-refresh-token", null));
+        when(authorizedClientRepository.loadAuthorizedClient("google", authentication, request)).thenReturn(client);
+        doThrow(new IllegalStateException("db down"))
+                .when(socialAccountCommandService).saveRefreshToken(1L, "google-refresh-token");
+
+        handler.onAuthenticationSuccess(request, response, authentication);
+
+        assertThat(response.getRedirectedUrl()).isEqualTo("http://localhost:5173/home?isNewUser=false");
         verify(authorizedClientRepository).removeAuthorizedClient("google", authentication, request, response);
     }
 

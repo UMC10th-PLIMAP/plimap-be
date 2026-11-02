@@ -1,11 +1,13 @@
 package com.example.plimap.global.external.apple;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withBadRequest;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.example.plimap.global.external.oidc.SocialAuthClientException;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import java.security.KeyPair;
@@ -47,10 +49,26 @@ class AppleAuthClientImplTest {
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_FORM_URLENCODED))
                 .andRespond(withSuccess());
         server.expect(requestTo("https://appleid.apple.com/auth/revoke"))
-                .andRespond(withBadRequest());
+                .andRespond(withBadRequest()
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error\":\"invalid_grant\"}"));
 
         assertThat(client.revoke("refresh-token")).isTrue();
         assertThat(client.revoke("refresh-token")).isFalse();
         server.verify();
+    }
+
+    @Test
+    void revoke가_client_secret_오류로_거부되면_재로그인이_아닌_예외를_던진다() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        AppleAuthClientImpl client = new AppleAuthClientImpl(builder.build(), properties);
+        server.expect(requestTo("https://appleid.apple.com/auth/revoke"))
+                .andRespond(withBadRequest()
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error\":\"invalid_client\"}"));
+
+        assertThatThrownBy(() -> client.revoke("refresh-token"))
+                .isExactlyInstanceOf(SocialAuthClientException.class);
     }
 }

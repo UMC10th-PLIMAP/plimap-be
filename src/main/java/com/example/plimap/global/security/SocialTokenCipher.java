@@ -26,7 +26,7 @@ public class SocialTokenCipher {
 
     // 키는 Base64로 인코딩된 32바이트 값이다(예: openssl rand -base64 32).
     public SocialTokenCipher(@Value("${social-token.encryption-key}") String base64Key) {
-        byte[] keyBytes = Base64.getDecoder().decode(base64Key);
+        byte[] keyBytes = Base64.getDecoder().decode(base64Key.trim());
         if (keyBytes.length != 32) {
             throw new IllegalStateException("social-token.encryption-key must be 32 bytes (Base64)");
         }

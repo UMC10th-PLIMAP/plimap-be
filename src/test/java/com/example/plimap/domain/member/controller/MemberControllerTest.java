@@ -33,6 +33,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -281,6 +282,19 @@ class MemberControllerTest {
 
         verify(memberCommandService).withdraw(AUTH_MEMBER_ID, null);
         verify(sessionInvalidationService).invalidate(any(), any());
+    }
+
+    @Test
+    void 재로그인_후_탈퇴_요청_본문의_authorizationCode를_서비스로_전달한다() throws Exception {
+        doNothing().when(memberCommandService).withdraw(AUTH_MEMBER_ID, "reauth-code");
+
+        mockMvc.perform(delete("/api/v1/members/me")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + ACCESS_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"authorizationCode\":\"reauth-code\"}"))
+                .andExpect(status().isOk());
+
+        verify(memberCommandService).withdraw(AUTH_MEMBER_ID, "reauth-code");
     }
 
     @Test

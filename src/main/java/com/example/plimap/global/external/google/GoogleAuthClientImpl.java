@@ -2,6 +2,7 @@ package com.example.plimap.global.external.google;
 
 import com.example.plimap.global.external.oidc.OidcTokenResponse;
 import com.example.plimap.global.external.oidc.SocialAuthClientException;
+import com.example.plimap.global.external.oidc.SocialAuthRejectedException;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageConversionException;
@@ -43,10 +44,15 @@ public class GoogleAuthClientImpl implements GoogleAuthClient {
                     .body(form)
                     .retrieve()
                     .body(OidcTokenResponse.class);
-            if (response == null || response.refreshToken() == null) {
-                throw new SocialAuthClientException("Google token API returned no refresh token");
+            if (response == null || response.idToken() == null) {
+                throw new SocialAuthClientException("Google token API returned no ID token");
             }
             return response;
+        } catch (HttpClientErrorException exception) {
+            if (SocialAuthRejectedException.isRejection(exception)) {
+                throw new SocialAuthRejectedException("Google rejected the authorization code", exception);
+            }
+            throw new SocialAuthClientException("Google token API request failed", exception);
         } catch (RestClientException | HttpMessageConversionException exception) {
             throw new SocialAuthClientException("Google token API request failed", exception);
         }
@@ -65,7 +71,10 @@ public class GoogleAuthClientImpl implements GoogleAuthClient {
                     .toBodilessEntity();
             return true;
         } catch (HttpClientErrorException exception) {
-            return false;
+            if (SocialAuthRejectedException.isRejection(exception)) {
+                return false;
+            }
+            throw new SocialAuthClientException("Google revoke API rejected the request", exception);
         } catch (RestClientException exception) {
             throw new SocialAuthClientException("Google revoke API request failed", exception);
         }

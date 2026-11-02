@@ -292,13 +292,9 @@ public class MemberCommandServiceImpl implements MemberCommandService {
         Member member = memberQueryService.getActiveMember(memberId);
         String oldProfileImageKey = member.getProfileImageObjectKey();
 
-        // 소셜 연결을 먼저 끊는다. 애플/구글을 끊지 못하면 재로그인 요청 예외가 나고 아무것도 변경되지 않는다.
-        socialAccountCommandService.unlink(memberId, reauthCode);
-
         member.withdrawVoluntarily();
         memberFollowRepository.deleteByIdFollowerId(memberId);
         memberFollowRepository.deleteByIdFollowingId(memberId);
-        socialAccountCommandService.deleteByMemberId(memberId);
 
         try {
             memberRepository.saveAndFlush(member);
@@ -307,6 +303,11 @@ public class MemberCommandServiceImpl implements MemberCommandService {
             // 우연히 겹치는 경우 DB의 대소문자 무시 유니크 인덱스(uk_member_nickname_ci)에서 걸러진다.
             throw new MemberException(MemberErrorCode.NICKNAME_DUPLICATE, e);
         }
+
+        // DB 검증(닉네임 충돌)을 통과한 뒤 같은 트랜잭션 안에서 소셜 연결을 끊는다. 애플/구글을 끊지 못하면
+        // 재로그인 요청 예외로 탈퇴 전체가 롤백되고, revoke 이후 닉네임 충돌로 롤백되는 경우는 생기지 않는다.
+        socialAccountCommandService.unlink(memberId, reauthCode);
+        socialAccountCommandService.deleteByMemberId(memberId);
 
         // 탈퇴 트랜잭션 커밋 전에 스토리지 객체를 지우면, 커밋 실패(롤백) 시 DB는 여전히
         // oldProfileImageKey를 가리키는데 실제 객체는 이미 삭제된 상태가 된다. 실제 삭제는

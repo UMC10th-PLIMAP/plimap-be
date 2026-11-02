@@ -11,6 +11,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
@@ -20,6 +21,7 @@ import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.UriComponentsBuilder;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class OAuthSuccessHandler implements AuthenticationSuccessHandler {
@@ -81,8 +83,13 @@ public class OAuthSuccessHandler implements AuthenticationSuccessHandler {
         if (client == null) {
             return;
         }
-        if ("google".equals(registrationId) && client.getRefreshToken() != null) {
-            socialAccountCommandService.saveRefreshToken(memberId, client.getRefreshToken().getTokenValue());
+        // 저장 실패는 앱 로그인과 같이 로그인을 막지 않는다(탈퇴 시 재로그인 경로로 보완).
+        try {
+            if ("google".equals(registrationId) && client.getRefreshToken() != null) {
+                socialAccountCommandService.saveRefreshToken(memberId, client.getRefreshToken().getTokenValue());
+            }
+        } catch (RuntimeException exception) {
+            log.warn("웹 구글 refresh token 저장 실패 memberId={}", memberId, exception);
         }
         authorizedClientRepository.removeAuthorizedClient(registrationId, authentication, request, response);
     }
