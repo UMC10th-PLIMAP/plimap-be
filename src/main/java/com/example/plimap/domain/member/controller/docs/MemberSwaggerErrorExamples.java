@@ -17,6 +17,16 @@ final class MemberSwaggerErrorExamples {
     static final String NICKNAME_FORBIDDEN_WORD =
             JSON_PREFIX + "MEMBER_NICKNAME_FORBIDDEN_WORD"
                     + JSON_MESSAGE_SEPARATOR + "사용할 수 없는 닉네임입니다." + JSON_SUFFIX;
+    static final String APPLE_REAUTH_REQUIRED =
+            JSON_PREFIX + "AUTH_APPLE_REAUTH_REQUIRED"
+                    + JSON_MESSAGE_SEPARATOR + "탈퇴하려면 Apple 로그인을 한 번 더 진행해 주세요." + JSON_SUFFIX;
+    static final String GOOGLE_REAUTH_REQUIRED =
+            JSON_PREFIX + "AUTH_GOOGLE_REAUTH_REQUIRED"
+                    + JSON_MESSAGE_SEPARATOR + "탈퇴하려면 Google 로그인을 한 번 더 진행해 주세요." + JSON_SUFFIX;
+    static final String SOCIAL_UNLINK_FAILED =
+            JSON_PREFIX + "AUTH_SOCIAL_UNLINK_FAILED"
+                    + JSON_MESSAGE_SEPARATOR + "소셜 로그인 연결 해제 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
+                    + JSON_SUFFIX;
     static final String NICKNAME_DUPLICATE =
             JSON_PREFIX + "MEMBER_NICKNAME_DUPLICATE"
                     + JSON_MESSAGE_SEPARATOR + "이미 사용 중인 닉네임입니다." + JSON_SUFFIX;

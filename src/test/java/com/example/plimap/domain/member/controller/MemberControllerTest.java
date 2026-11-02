@@ -270,7 +270,7 @@ class MemberControllerTest {
 
     @Test
     void 회원_탈퇴에_성공하면_200과_WITHDRAWN_응답을_반환하고_세션을_무효화한다() throws Exception {
-        doNothing().when(memberCommandService).withdraw(AUTH_MEMBER_ID);
+        doNothing().when(memberCommandService).withdraw(AUTH_MEMBER_ID, null);
 
         mockMvc.perform(delete("/api/v1/members/me")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + ACCESS_TOKEN))
@@ -279,7 +279,7 @@ class MemberControllerTest {
                 .andExpect(jsonPath("$.code").value("MEMBER_WITHDRAWN_SUCCESS"))
                 .andExpect(jsonPath("$.result").doesNotExist());
 
-        verify(memberCommandService).withdraw(AUTH_MEMBER_ID);
+        verify(memberCommandService).withdraw(AUTH_MEMBER_ID, null);
         verify(sessionInvalidationService).invalidate(any(), any());
     }
 
@@ -293,7 +293,7 @@ class MemberControllerTest {
         when(jwtUtil.getMemberId(otherDeviceToken)).thenReturn(AUTH_MEMBER_ID);
         when(tokenBlacklistService.isBlacklisted(otherDeviceJti)).thenReturn(false);
 
-        doNothing().when(memberCommandService).withdraw(AUTH_MEMBER_ID);
+        doNothing().when(memberCommandService).withdraw(AUTH_MEMBER_ID, null);
 
         mockMvc.perform(delete("/api/v1/members/me")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + ACCESS_TOKEN))
@@ -311,7 +311,7 @@ class MemberControllerTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + otherDeviceToken))
                 .andExpect(status().isUnauthorized());
 
-        verify(memberCommandService).withdraw(AUTH_MEMBER_ID);
+        verify(memberCommandService).withdraw(AUTH_MEMBER_ID, null);
     }
 
     @Test

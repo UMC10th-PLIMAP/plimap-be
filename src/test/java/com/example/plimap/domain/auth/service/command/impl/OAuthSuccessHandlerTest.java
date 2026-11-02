@@ -1,6 +1,7 @@
 package com.example.plimap.domain.auth.service.command.impl;
 
 import com.example.plimap.domain.auth.entity.OAuthMember;
+import com.example.plimap.domain.auth.service.command.SocialAccountCommandService;
 import com.example.plimap.domain.member.entity.Member;
 import com.example.plimap.global.config.OAuthProperties;
 import com.example.plimap.global.security.AuthCookieUtil;
@@ -16,6 +17,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
+import org.springframework.security.oauth2.core.OAuth2RefreshToken;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -30,6 +35,9 @@ class OAuthSuccessHandlerTest {
     private final JwtUtil jwtUtil = mock(JwtUtil.class);
     private final RefreshTokenService refreshTokenService = mock(RefreshTokenService.class);
     private final AuthCookieUtil authCookieUtil = new AuthCookieUtil();
+    private final OAuth2AuthorizedClientRepository authorizedClientRepository =
+            mock(OAuth2AuthorizedClientRepository.class);
+    private final SocialAccountCommandService socialAccountCommandService = mock(SocialAccountCommandService.class);
 
     private OAuthFrontendRedirectCookieRepository redirectCookieRepository;
     private OAuthSuccessHandler handler;
@@ -133,6 +141,26 @@ class OAuthSuccessHandlerTest {
                 .isEqualTo("http://localhost:5173/home?foo=bar&isNewUser=true");
     }
 
+    @Test
+    void 웹_구글_로그인에서_받은_refresh_token을_저장하고_authorized_client를_지운다() throws Exception {
+        setUpTokenMocks();
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        Member member = mock(Member.class);
+        when(member.getId()).thenReturn(1L);
+        OAuth2AuthenticationToken authentication = mock(OAuth2AuthenticationToken.class);
+        when(authentication.getPrincipal()).thenReturn(new OAuthMember(member, Collections.emptyMap()));
+        when(authentication.getAuthorizedClientRegistrationId()).thenReturn("google");
+        OAuth2AuthorizedClient client = mock(OAuth2AuthorizedClient.class);
+        when(client.getRefreshToken()).thenReturn(new OAuth2RefreshToken("google-refresh-token", null));
+        when(authorizedClientRepository.loadAuthorizedClient("google", authentication, request)).thenReturn(client);
+
+        handler.onAuthenticationSuccess(request, response, authentication);
+
+        verify(socialAccountCommandService).saveRefreshToken(1L, "google-refresh-token");
+        verify(authorizedClientRepository).removeAuthorizedClient("google", authentication, request, response);
+    }
+
     private void setUpHandler(String redirectUri) {
         OAuthProperties properties = new OAuthProperties(
                 redirectUri,
@@ -144,7 +172,9 @@ class OAuthSuccessHandlerTest {
                 jwtUtil,
                 refreshTokenService,
                 authCookieUtil,
-                redirectCookieRepository
+                redirectCookieRepository,
+                authorizedClientRepository,
+                socialAccountCommandService
         );
     }
 

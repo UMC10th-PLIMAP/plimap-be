@@ -7,8 +7,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
-// 구글/애플 JWKS 조회 전용 RestClient. 두 provider가 URL만 다를 뿐 같은 방식(GET, JSON 문자열
-// 응답)으로 호출되므로 baseUrl 없이 하나의 클라이언트를 공유한다.
+// 구글/애플 JWKS 조회와 토큰 교환/해제(AppleAuthClient, GoogleAuthClient)에 쓰는 RestClient.
+// 모두 provider별 전체 URL로 호출하므로 baseUrl 없이 하나의 클라이언트를 공유한다.
 @Configuration
 @EnableConfigurationProperties(JwksRestClientProperties.class)
 public class JwksRestClientConfig {

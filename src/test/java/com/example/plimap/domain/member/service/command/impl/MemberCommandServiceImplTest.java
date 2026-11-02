@@ -1,5 +1,7 @@
 package com.example.plimap.domain.member.service.command.impl;
 
+import com.example.plimap.domain.auth.exception.AuthErrorCode;
+import com.example.plimap.domain.auth.exception.AuthException;
 import com.example.plimap.domain.auth.service.command.SocialAccountCommandService;
 import com.example.plimap.domain.member.dto.request.MemberReqDTO;
 import com.example.plimap.domain.member.dto.response.MemberResponse;
@@ -638,7 +640,7 @@ class MemberCommandServiceImplTest {
         ReflectionTestUtils.setField(member, "id", MEMBER_ID);
         when(memberQueryService.getActiveMember(MEMBER_ID)).thenReturn(member);
 
-        memberCommandService.withdraw(MEMBER_ID);
+        memberCommandService.withdraw(MEMBER_ID, null);
 
         assertThat(member.getNickname()).isEqualTo("플리맵사용자" + MEMBER_ID);
         assertThat(member.getWithdrawnNickname()).isEqualTo("예림");
@@ -650,9 +652,27 @@ class MemberCommandServiceImplTest {
 
         verify(memberFollowRepository).deleteByIdFollowerId(MEMBER_ID);
         verify(memberFollowRepository).deleteByIdFollowingId(MEMBER_ID);
+        verify(socialAccountCommandService).unlink(MEMBER_ID, null);
         verify(socialAccountCommandService).deleteByMemberId(MEMBER_ID);
         verify(profileImageStorage, never()).delete(any());
         verify(eventPublisher).publishEvent(new MemberWithdrawnEvent(MEMBER_ID, "old-key"));
+    }
+
+    @Test
+    void 소셜_연결을_끊지_못하면_탈퇴하지_않고_재로그인_예외를_던진다() {
+        Member member = Member.builder().nickname("예림").build();
+        ReflectionTestUtils.setField(member, "id", MEMBER_ID);
+        when(memberQueryService.getActiveMember(MEMBER_ID)).thenReturn(member);
+        doThrow(new AuthException(AuthErrorCode.APPLE_REAUTH_REQUIRED))
+                .when(socialAccountCommandService).unlink(MEMBER_ID, null);
+
+        assertThatThrownBy(() -> memberCommandService.withdraw(MEMBER_ID, null))
+                .isInstanceOfSatisfying(AuthException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(AuthErrorCode.APPLE_REAUTH_REQUIRED));
+
+        assertThat(member.getStatus()).isEqualTo(MemberStatus.ACTIVE);
+        verify(socialAccountCommandService, never()).deleteByMemberId(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
@@ -661,7 +681,7 @@ class MemberCommandServiceImplTest {
         ReflectionTestUtils.setField(member, "id", MEMBER_ID);
         when(memberQueryService.getActiveMember(MEMBER_ID)).thenReturn(member);
 
-        memberCommandService.withdraw(MEMBER_ID);
+        memberCommandService.withdraw(MEMBER_ID, null);
 
         verify(eventPublisher).publishEvent(new MemberWithdrawnEvent(MEMBER_ID, null));
     }
@@ -671,7 +691,7 @@ class MemberCommandServiceImplTest {
         when(memberQueryService.getActiveMember(MEMBER_ID))
                 .thenThrow(new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
 
-        assertThatThrownBy(() -> memberCommandService.withdraw(MEMBER_ID))
+        assertThatThrownBy(() -> memberCommandService.withdraw(MEMBER_ID, null))
                 .isInstanceOfSatisfying(MemberException.class, exception ->
                         assertThat(exception.getErrorCode()).isEqualTo(MemberErrorCode.MEMBER_NOT_FOUND));
     }
@@ -684,7 +704,7 @@ class MemberCommandServiceImplTest {
         doThrow(new DataIntegrityViolationException("duplicate"))
                 .when(memberRepository).saveAndFlush(any(Member.class));
 
-        assertThatThrownBy(() -> memberCommandService.withdraw(MEMBER_ID))
+        assertThatThrownBy(() -> memberCommandService.withdraw(MEMBER_ID, null))
                 .isInstanceOfSatisfying(MemberException.class, exception ->
                         assertThat(exception.getErrorCode()).isEqualTo(MemberErrorCode.NICKNAME_DUPLICATE));
 
@@ -776,6 +796,8 @@ class MemberCommandServiceImplTest {
         verify(memberFollowRepository).deleteByIdFollowerId(MEMBER_ID);
         verify(memberFollowRepository).deleteByIdFollowingId(MEMBER_ID);
         verify(memberRepository).saveAndFlush(member);
+        verify(socialAccountCommandService).unlinkQuietly(MEMBER_ID);
+        verify(socialAccountCommandService, never()).deleteByMemberId(any());
         verify(eventPublisher).publishEvent(new MemberWithdrawnEvent(MEMBER_ID, "old-key"));
     }
 

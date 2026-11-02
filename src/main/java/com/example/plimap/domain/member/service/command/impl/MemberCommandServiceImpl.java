@@ -288,9 +288,12 @@ public class MemberCommandServiceImpl implements MemberCommandService {
 
     @Override
     @Transactional
-    public void withdraw(Long memberId) {
+    public void withdraw(Long memberId, String reauthCode) {
         Member member = memberQueryService.getActiveMember(memberId);
         String oldProfileImageKey = member.getProfileImageObjectKey();
+
+        // 소셜 연결을 먼저 끊는다. 애플/구글을 끊지 못하면 재로그인 요청 예외가 나고 아무것도 변경되지 않는다.
+        socialAccountCommandService.unlink(memberId, reauthCode);
 
         member.withdrawVoluntarily();
         memberFollowRepository.deleteByIdFollowerId(memberId);
@@ -329,6 +332,8 @@ public class MemberCommandServiceImpl implements MemberCommandService {
 
         memberFollowRepository.deleteByIdFollowerId(memberId);
         memberFollowRepository.deleteByIdFollowingId(memberId);
+        // 재가입 차단용 SocialAccount는 남기되 provider 연결은 끊는다. 실패해도 자동 탈퇴는 진행한다.
+        socialAccountCommandService.unlinkQuietly(memberId);
 
         try {
             memberRepository.saveAndFlush(member);
