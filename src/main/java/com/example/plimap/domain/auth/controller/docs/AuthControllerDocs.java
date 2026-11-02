@@ -32,6 +32,10 @@ public interface AuthControllerDocs {
                     서버가 provider에 직접 토큰을 검증하고 accessToken/refreshToken을 JSON 응답으로 반환합니다.
                     기존 웹 로그인(OAuth2Login 리다이렉트 + 쿠키)과는 별개의 흐름입니다.
 
+                    애플/구글은 authorizationCode(애플 authorizationCode, 구글 serverAuthCode)를 함께 보내면
+                    서버가 refresh token으로 교환해 저장해 두고, 회원 탈퇴 시 이 토큰으로 provider 연결을 끊습니다.
+                    없거나 교환에 실패해도 로그인은 성공하며, 이 경우 탈퇴할 때 재로그인을 한 번 거칩니다.
+
                     정지/자동탈퇴 회원은 200 응답에 accessToken 없이 status/reasonCategory/reasonDetail/suspendedUntil 등
                     제재 정보만 채워서 반환합니다.
                     """
