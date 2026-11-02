@@ -7,6 +7,7 @@ import com.example.plimap.domain.member.repository.MemberRepository;
 import com.example.plimap.global.security.AuthCookieUtil;
 import com.example.plimap.global.security.BearerTokenRequestMatcher;
 import com.example.plimap.global.security.CsrfCookieFilter;
+import com.example.plimap.global.security.GoogleOfflineAuthorizationRequestResolver;
 import com.example.plimap.global.security.HttpCookieOAuth2AuthorizationRequestRepository;
 import com.example.plimap.global.security.JwtAuthFilter;
 import com.example.plimap.global.security.JwtUtil;
@@ -27,9 +28,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
-import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
-import org.springframework.security.oauth2.core.endpoint.OAuth2ParameterNames;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
@@ -124,7 +123,8 @@ public class SecurityConfig {
                 .oauth2Login(oauth -> oauth
                         .authorizationEndpoint(endpoint -> endpoint
                                 .baseUri("/oauth/authorization")
-                                .authorizationRequestResolver(authorizationRequestResolver(clientRegistrationRepository))
+                                .authorizationRequestResolver(new GoogleOfflineAuthorizationRequestResolver(
+                                        clientRegistrationRepository, "/oauth/authorization"))
                                 .authorizationRequestRepository(authorizationRequestRepository))
                         .redirectionEndpoint(endpoint ->
                                 endpoint.baseUri("/oauth/callback/*"))
@@ -144,19 +144,5 @@ public class SecurityConfig {
                 );
 
         return http.build();
-    }
-
-    // 구글 로그인에만 access_type=offline을 붙여 refresh token을 받는다(탈퇴 시 연결 끊기용, OAuthSuccessHandler).
-    private DefaultOAuth2AuthorizationRequestResolver authorizationRequestResolver(
-            ClientRegistrationRepository clientRegistrationRepository
-    ) {
-        DefaultOAuth2AuthorizationRequestResolver resolver = new DefaultOAuth2AuthorizationRequestResolver(
-                clientRegistrationRepository, "/oauth/authorization");
-        resolver.setAuthorizationRequestCustomizer(builder -> builder.attributes(attributes -> {
-            if ("google".equals(attributes.get(OAuth2ParameterNames.REGISTRATION_ID))) {
-                builder.additionalParameters(params -> params.put("access_type", "offline"));
-            }
-        }));
-        return resolver;
     }
 }

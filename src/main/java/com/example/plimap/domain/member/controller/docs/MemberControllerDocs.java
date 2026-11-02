@@ -709,6 +709,7 @@ public interface MemberControllerDocs {
                     - 탈퇴 전에 소셜 로그인 연결을 끊습니다. 카카오는 서버가 바로 끊고, 애플/구글은 로그인 때 저장한 토큰으로 끊습니다.
                     - 애플/구글 연결을 끊지 못하면(저장된 토큰 없음·만료) 409 `AUTH_APPLE_REAUTH_REQUIRED` / `AUTH_GOOGLE_REAUTH_REQUIRED`를 반환하고 탈퇴하지 않습니다. 앱은 해당 provider로 다시 로그인해 받은 code를 요청 바디 `authorizationCode`에 담아 다시 호출합니다.
                     - 요청 바디는 재시도할 때만 보내며, 처음 요청은 바디 없이 호출합니다.
+                    - 웹에서 `AUTH_GOOGLE_REAUTH_REQUIRED`를 받으면 `/oauth/authorization/google?reauth=true`로 구글 로그인을 다시 진행합니다. 이때만 동의 화면이 표시되고 새 refresh token이 저장되므로, 돌아온 뒤 바디 없이 다시 호출합니다. 재로그인 전후 회원이 다르면(다른 구글 계정 선택) 탈퇴를 이어가지 않아야 합니다.
                     """
     )
     @ApiResponses({
