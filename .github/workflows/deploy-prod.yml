@@ -75,7 +75,7 @@ jobs:
       - name: Configure Artifact Registry authentication
         run: gcloud auth configure-docker asia-northeast3-docker.pkg.dev --quiet
 
-      - name: Build and verify approved commit image
+      - name: Build approved commit image
         env:
           DEPLOY_SHA: ${{ needs.prepare.outputs.deploy-sha }}
           IMAGE: asia-northeast3-docker.pkg.dev/plimap/plimap-docker/api:${{ needs.prepare.outputs.deploy-sha }}
@@ -92,18 +92,27 @@ jobs:
             exit 1
           fi
 
-          resolved_image="${IMAGE%:*}@${digest}"
-          docker pull "$resolved_image" >/dev/null
-          resolved_revision="$(
-            docker image inspect "$resolved_image" \
-              --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}'
-          )"
-          if [[ "$resolved_revision" != "$DEPLOY_SHA" ]]; then
-            echo "Resolved image revision does not match approved commit: expected=$DEPLOY_SHA actual=$resolved_revision" >&2
-            exit 1
-          fi
+          echo "DEPLOY_SOURCE_IMAGE=${IMAGE%:*}@${digest}" >> "$GITHUB_ENV"
 
-          echo "DEPLOY_IMAGE=$resolved_image" >> "$GITHUB_ENV"
+      - name: Resolve and verify runtime image
+        shell: pwsh
+        env:
+          DEPLOY_SHA: ${{ needs.prepare.outputs.deploy-sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          . ./scripts/gcp/container-image.ps1
+          $runtimeImage = Resolve-LinuxAmd64Image -Image $env:DEPLOY_SOURCE_IMAGE
+          docker pull --platform=linux/amd64 $runtimeImage
+          if ($LASTEXITCODE -ne 0) { throw "Could not pull the runtime image." }
+          $platform = docker image inspect $runtimeImage --format '{{.Os}}/{{.Architecture}}'
+          if ($LASTEXITCODE -ne 0 -or $platform -ne "linux/amd64") {
+            throw "Runtime image must target linux/amd64."
+          }
+          $revision = docker image inspect $runtimeImage --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}'
+          if ($LASTEXITCODE -ne 0 -or $revision -ne $env:DEPLOY_SHA) {
+            throw "Runtime image revision does not match the approved commit."
+          }
+          "DEPLOY_IMAGE=$runtimeImage" >> $env:GITHUB_ENV
 
       - name: Deploy candidate, verify, and promote
         shell: pwsh
@@ -173,6 +182,7 @@ jobs:
               "| Status | $($result.status) |",
               "| Previous revision | ``$($result.previousRevision)`` |",
               "| Candidate revision | ``$($result.candidateRevision)`` |",
+              "| Approved source image | ``$($result.approvedSourceImage)`` |",
               "| Secret versions | $secretVersionSummary |",
               "| Candidate verification | $($result.candidateVerification) |",
               "| Traffic promotion | $($result.trafficPromotion) |",

@@ -11,6 +11,8 @@
 - `grant-prod-database-existing-objects.sql`: 각 기존 객체 owner가 별도로 실행해 자신이 소유한 객체에 runtime 권한을 부여합니다.
 - `bootstrap-prod-cloud-run.ps1`: 신규 프로젝트·재해 복구 시 LB 전용 ingress와 서비스 단위 IAM을 재구축합니다. 기본 실행은 plan-only이며 승인된 `-Apply`가 있어야 변경합니다.
 - `deploy-prod.ps1`: Prod revision을 공개 traffic tag 없이 0%로 기동하고 Ready·image digest를 검증한 뒤 트래픽을 전환하며, LB 전용 상태 또는 선택적 공개 smoke 검증 실패 시 직전 revision을 복구합니다.
+- `container-image.ps1`: 승인된 원본 manifest에서 유일한 `linux/amd64` 실행 digest를 확정하는 공통 함수를 제공합니다.
+- `test-deploy-prod-image.ps1`: 외부 호출 없이 manifest 선택과 실제 배포 스크립트의 Ready·트래픽 전환·rollback 경로를 검증합니다.
 - `configure-prod-5xx-discord-alert.ps1`: Prod 애플리케이션 5xx 로그를 Discord로 전달하는 Logging Sink, Pub/Sub, Cloud Run Function과 Eventarc를 구성합니다. 기본 실행은 plan-only입니다.
 - `send-prod-5xx-discord-test.ps1`: 같은 전달 경로를 확인하는 `[TEST]` 합성 로그 한 건을 기록합니다. 기본 실행은 plan-only입니다.
 - `prod-5xx-discord/`: Python Cloud Run Function 소스와 단위 테스트를 보관합니다.
@@ -20,6 +22,7 @@
 
 - Google Cloud CLI를 설치하고 `plimap` 프로젝트에 접근 가능한 계정으로 인증합니다.
 - 배포할 컨테이너 이미지가 Artifact Registry에 존재해야 합니다.
+- Prod 배포에는 Artifact Registry 인증이 설정된 Docker CLI와 Buildx가 필요합니다. `gcloud auth configure-docker asia-northeast3-docker.pkg.dev`로 registry 인증을 구성합니다.
 - 환경별 Secret Manager 항목에 활성 버전이 있어야 합니다.
 - Cloud Run runtime service account와 필요한 IAM 권한을 먼저 구성해야 합니다.
 
@@ -113,7 +116,7 @@ Prod는 GitHub Actions의 `Deploy Prod` 워크플로 사용을 원칙으로 합�
 
 스크립트는 다음 순서로 동작합니다.
 
-1. 입력값 형식, 승인된 Artifact Registry repository의 commit SHA image와 immutable digest 일치를 확인합니다.
+1. 입력값 형식과 승인된 Artifact Registry repository의 commit SHA image를 확인합니다. 원본이 index/list이면 `linux/amd64` 실행 manifest를 확정합니다. 입력은 원본 또는 선택된 실행 digest만 허용하고 배포에는 실행 digest를 사용합니다.
 2. Runtime service account, VPC/subnet, GCS bucket을 확인하고 각 Prod Secret의 `latest`가 가리키는 `ENABLED` 숫자 버전을 확정합니다.
 3. 사전 생성된 서비스의 공개 Invoker, LB 전용 ingress와 기본 URL 비활성 상태를 확인한 뒤 새 revision을 공개 tag 없이 `--no-traffic`과 deploy health check로 기동합니다.
 4. 후보 revision이 Ready이고 실제 resolved image digest가 승인된 digest와 일치하는지 확인합니다.

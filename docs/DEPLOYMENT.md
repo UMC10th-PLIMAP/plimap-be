@@ -331,13 +331,15 @@ Public Access Prevention 조직 정책이 강제되어 있다면 공개 URL 방�
 2. 성공한 CI의 정확한 commit SHA로 `Deploy Prod`의 비보호 `prepare` Job이 시작됩니다.
 3. `deploy` Job은 GitHub `production` Environment에서 대기하며 승인 전에는 Environment Variable, GCP OIDC 권한과 운영 리소스에 접근하지 않습니다.
 4. 필수 승인자가 Actions의 **Review deployments → Approve and deploy**를 선택합니다.
-5. 승인된 Job이 정확한 commit SHA checkout을 OCI revision label과 함께 image로 빌드·push하고, 원격 digest와 revision label을 검증해 immutable image를 확정합니다.
+5. 승인된 Job이 정확한 commit SHA checkout을 OCI revision label과 함께 image로 빌드·push합니다. 원격 이미지가 OCI index 또는 Docker manifest list이면 유일한 `linux/amd64` 실행 manifest를 선택하고, 해당 이미지의 실제 플랫폼과 revision label을 검증해 immutable 실행 digest를 확정합니다. 빌드 증명(attestation)은 인덱스에 유지하되 실행 이미지로 선택하지 않습니다.
 6. 입력 리소스와 기존 서비스의 단일 revision 100% 트래픽, LB 전용 ingress, 기본 URL 비활성 상태와 공개 Invoker IAM을 확인하고 각 Prod Secret의 `ENABLED` 숫자 버전을 고정합니다.
 7. 공개 traffic tag 없이 `--no-traffic`과 deploy health check로 신규 revision을 시작하고, 제어 영역의 상태 반영 지연을 고려한 제한된 재시도로 Ready 상태와 실제 image digest를 확인합니다.
 8. 검증된 revision으로 트래픽을 100% 전환하고 실제 서비스 트래픽이 단일 revision 100%로 수렴하는지 확인합니다. 기본 `run.app` URL은 계속 비활성화합니다.
 9. 서비스 ingress와 기본 URL 비활성 상태를 재검증하고, 현재 운영값인 `PROD_PUBLIC_SMOKE_ENABLED=true`에 따라 `plimap.kr`의 프론트, CSRF 응답·cookie, Google OAuth 3xx·`Location`과 문서·Actuator 차단을 검증합니다.
 10. 실패 시 현재 트래픽 상태를 다시 조회하고 직전 revision으로 100% 복구한 뒤 트래픽 수렴과 LB 전용 상태를 재검증합니다.
-11. Commit, image digest, Secret ID·숫자 버전, 이전·신규 revision, 내부·공개 검증과 rollback 결과를 Actions Summary에 기록합니다.
+11. Commit, 승인된 원본 digest와 실행 image digest, Secret ID·숫자 버전, 이전·신규 revision, 내부·공개 검증과 rollback 결과를 Actions Summary에 기록합니다.
+
+배포 스크립트는 commit SHA tag의 원본 manifest를 다시 조회하고 실행 digest를 독립적으로 확정합니다. 입력은 승인된 원본 또는 그 실행 digest만 허용하며 실제 배포와 후보 revision 비교에는 실행 digest를 사용합니다. 원본 인덱스와 하위 이미지의 digest가 다른 것은 정상입니다. 플랫폼이 없거나 중복되어 실행 이미지 선택이 모호하면 트래픽 전환 전에 실패합니다. 이 검증에는 인증된 Docker CLI와 Buildx가 필요합니다.
 
 0% 신규 revision은 외부 호출용 tag URL을 갖지 않고 기본 URL도 계속 비활성화하지만, deploy health check 과정에서 시작되므로 Flyway가 사용자 트래픽 전환 전에 운영 DB를 변경할 수 있습니다. 배포 실패 시 직전 애플리케이션 revision으로 트래픽을 100% 복구하되 DB Migration은 자동 rollback되지 않으므로 Migration 호환성과 Actions Summary를 반드시 확인합니다.
 
