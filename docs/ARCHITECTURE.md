@@ -87,6 +87,7 @@ com.example.plimap/
 │   ├── config/                     # 설정 클래스
 │   ├── entity/                     # BaseEntity, SoftDeleteEntity 등 공통 엔티티
 │   ├── logging/                    # 공통 HTTP 오류 로그
+│   ├── monitoring/                 # 선택적 애플리케이션 시작 진단
 │   ├── security/                   # 인증/인가 보안 설정
 │   ├── swagger/                    # Swagger/OpenAPI 설정
 │   └── external/                   # 외부 시스템 연동 공통 영역
