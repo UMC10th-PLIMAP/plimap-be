@@ -81,3 +81,27 @@ jobs:
 
       - name: Build and test with Gradle
         run: ./gradlew build --no-daemon
+
+  appcds-image:
+    name: AppCDS image and application archive
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Build and verify offline AppCDS training
+        run: docker build --tag plimap-appcds:ci .
+
+      - name: Test ON/OFF archive use and isolated API behavior
+        shell: pwsh
+        run: ./scripts/appcds/test-appcds.ps1 -Image plimap-appcds:ci -ResultDirectory ./build/appcds-validation
+
+      - name: Show local startup diagnostics on failure
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-ChildItem ./build/appcds-validation/*-application.log -ErrorAction SilentlyContinue |
+            ForEach-Object { Get-Content -LiteralPath $_.FullName -Tail 80 }
