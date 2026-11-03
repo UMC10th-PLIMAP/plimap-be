@@ -83,6 +83,8 @@ function gcloud {
         '^run deploy ' {
             if ($arguments -notcontains "--no-traffic") { throw "Candidate must start with no traffic" }
             $fixture.deployedImage = ($arguments | Where-Object { $_ -like '--image=*' }).Substring(8)
+            $envFile = ($arguments | Where-Object { $_ -like '--env-vars-file=*' }).Substring(16)
+            $fixture.environmentText = Get-Content -LiteralPath $envFile -Raw
             $suffix = ($arguments | Where-Object { $_ -like '--revision-suffix=*' }).Substring(18)
             $fixture.candidate = "plimap-api-prod-$suffix"
             return
@@ -124,7 +126,7 @@ $deployPath = Join-Path $PSScriptRoot "deploy-prod.ps1"
 $testDirectory = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
 [IO.Directory]::CreateDirectory($testDirectory) | Out-Null
 try {
-    foreach ($scenario in @("success-index", "success-runtime", "success-single", "wrong-input", "wrong-repository", "registry-failure", "image-mismatch", "not-ready", "traffic-not-converged", "promotion-command-failure", "post-promotion-failure")) {
+    foreach ($scenario in @("success-index", "success-runtime", "success-single", "success-appcds-off", "success-instrumented", "success-uppercase", "wrong-input", "wrong-repository", "registry-failure", "image-mismatch", "not-ready", "traffic-not-converged", "promotion-command-failure", "post-promotion-failure")) {
         $global:PlimapDeploymentFixture = @{
             scenario = $scenario
             indexDigest = $indexDigest
@@ -151,10 +153,15 @@ try {
             default { $indexImage }
         }
         $resultPath = Join-Path $testDirectory "$scenario.json"
+        $appCdsEnabled = if ($scenario -eq "success-appcds-off") { "false" } else { "true" }
+        $startupMonitoringEnabled = if ($scenario -in @("success-instrumented", "success-uppercase")) { "true" } else { "false" }
+        $appCdsInput = if ($scenario -eq "success-uppercase") { "TRUE" } else { $appCdsEnabled }
+        $startupMonitoringInput = if ($scenario -eq "success-uppercase") { "TRUE" } else { $startupMonitoringEnabled }
         $failure = $null
         try {
             & $deployPath -Image $inputImage -DeployCommit ("e" * 40) `
                 -ProfileImageBucket "test-profile-images" -VpcNetwork "test-vpc" -VpcSubnet "test-subnet" `
+                -AppCdsEnabled $appCdsInput -StartupMonitoringEnabled $startupMonitoringInput `
                 -ResultPath $resultPath
         } catch { $failure = $_.Exception.Message }
         $result = Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json
@@ -164,6 +171,12 @@ try {
             Assert-Equal $fixture.deployedImage $runtimeImage "Deploy must use the child digest"
             Assert-Equal $result.approvedSourceImage $fixture.indexImage "Source manifest audit record"
             Assert-Equal $fixture.active $fixture.candidate "Traffic promotion"
+            Assert-Equal $result.appCdsEnabled $appCdsEnabled "AppCDS audit record"
+            Assert-Equal $result.startupMonitoringEnabled $startupMonitoringEnabled "Monitoring audit record"
+            if (-not $fixture.environmentText.Contains("PLIMAP_APP_CDS_ENABLED: '$appCdsEnabled'") -or
+                -not $fixture.environmentText.Contains("PLIMAP_STARTUP_MONITORING_ENABLED: '$startupMonitoringEnabled'")) {
+                throw "AppCDS/monitoring selection must survive env-vars-file replacement."
+            }
         } else {
             if (-not $failure) { throw "Expected failure in $scenario" }
             Assert-Equal $fixture.active "previous-revision" "Previous traffic must remain or be restored"

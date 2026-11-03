@@ -43,11 +43,15 @@ Dev는 `dev.plimap.kr`, Prod는 `plimap.kr`에서 운영 중입니다.
 
 - Java 21과 Spring Boot 애플리케이션을 하나의 컨테이너 이미지로 빌드합니다.
 - Docker 이미지는 JDK builder와 JRE runtime을 분리한 multi-stage build를 사용합니다.
+- 기본 이미지는 Java 21 AppCDS archive를 포함한 추출 실행 구조입니다. 학습·실행은 동일한 고정 JRE 이미지를 사용하고, `PLIMAP_APP_CDS_ENABLED=false`로 같은 이미지의 애플리케이션 archive만 끌 수 있습니다.
+- Prod 배포 워크플로는 시작 계측을 기본 활성화합니다. `PROD_APP_CDS_ENABLED`와 `PROD_STARTUP_MONITORING_ENABLED` GitHub Variables로 각각 `true`/`false`를 선택하고, 배포 결과에 선택값을 기록합니다. 수동 스크립트의 시작 계측 기본값은 기존처럼 `false`입니다.
 - 컨테이너는 non-root 사용자로 실행하며 기본 포트는 `8080`입니다.
 - Hibernate는 스키마를 자동 생성하지 않고 검증만 수행합니다.
 - Flyway가 애플리케이션 시작 시 데이터베이스 Migration을 적용합니다.
 - Actuator는 애플리케이션 내부·배포 검증용 상태 endpoint만 활성화하고 상세 컴포넌트 정보는 노출하지 않습니다. Prod 공개 Load Balancer는 Actuator 경로를 `404`로 차단합니다.
 - 프록시 환경에서는 전달된 host와 protocol 정보를 Spring이 인식하도록 forwarded header 처리를 사용합니다.
+
+AppCDS 학습 격리, 실제 archive 사용 확인, ON/OFF 비교와 복구 방법은 [AppCDS 측정 준비](../scripts/gcp/APPCDS.md)를 참고합니다.
 
 ---
 
