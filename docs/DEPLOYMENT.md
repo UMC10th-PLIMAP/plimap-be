@@ -51,7 +51,7 @@ Dev는 `dev.plimap.kr`, Prod는 `plimap.kr`에서 운영 중입니다.
 - Actuator는 애플리케이션 내부·배포 검증용 상태 endpoint만 활성화하고 상세 컴포넌트 정보는 노출하지 않습니다. Prod 공개 Load Balancer는 Actuator 경로를 `404`로 차단합니다.
 - 프록시 환경에서는 전달된 host와 protocol 정보를 Spring이 인식하도록 forwarded header 처리를 사용합니다.
 
-AppCDS 학습 격리, 실제 archive 사용 확인, ON/OFF 비교와 복구 방법은 [AppCDS 측정 준비](APPCDS.md)를 참고합니다.
+AppCDS 학습 격리, 실제 archive 사용 확인, ON/OFF 비교와 복구 방법은 [AppCDS 측정 준비](../scripts/gcp/APPCDS.md)를 참고합니다.
 
 ---
 
