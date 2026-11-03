@@ -13,6 +13,7 @@
 - `deploy-prod.ps1`: Prod revision을 공개 traffic tag 없이 0%로 기동하고 Ready·image digest를 검증한 뒤 트래픽을 전환하며, LB 전용 상태 또는 선택적 공개 smoke 검증 실패 시 직전 revision을 복구합니다.
 - `container-image.ps1`: 승인된 원본 manifest에서 유일한 `linux/amd64` 실행 digest를 확정하는 공통 함수를 제공합니다.
 - `test-deploy-prod-image.ps1`: 외부 호출 없이 manifest 선택과 실제 배포 스크립트의 Ready·트래픽 전환·rollback 경로를 검증합니다.
+- `deploy-prod.ps1`의 `-AppCdsEnabled true|false`, `-StartupMonitoringEnabled true|false`는 env-vars-file에 명시되어 배포 시 설정이 유실되지 않습니다. AppCDS 기본값은 `true`, 수동 시작 계측 기본값은 `false`이고 Prod 워크플로에서는 두 값 모두 기본 `true`입니다. [검증·측정 절차](../../docs/APPCDS.md)를 참고합니다.
 - `configure-prod-5xx-discord-alert.ps1`: Prod 애플리케이션 5xx 로그를 Discord로 전달하는 Logging Sink, Pub/Sub, Cloud Run Function과 Eventarc를 구성합니다. 기본 실행은 plan-only입니다.
 - `send-prod-5xx-discord-test.ps1`: 같은 전달 경로를 확인하는 `[TEST]` 합성 로그 한 건을 기록합니다. 기본 실행은 plan-only입니다.
 - `prod-5xx-discord/`: Python Cloud Run Function 소스와 단위 테스트를 보관합니다.

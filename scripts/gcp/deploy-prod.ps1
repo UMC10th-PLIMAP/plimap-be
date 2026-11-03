@@ -30,11 +30,17 @@ param(
     [ValidatePattern("^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$")]
     [string]$VpcSubnet,
     [switch]$PublicSmokeEnabled,
+    [ValidateSet("true", "false")]
+    [string]$AppCdsEnabled = "true",
+    [ValidateSet("true", "false")]
+    [string]$StartupMonitoringEnabled = "false",
     [string]$ResultPath = ""
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+$AppCdsEnabled = $AppCdsEnabled.ToLowerInvariant()
+$StartupMonitoringEnabled = $StartupMonitoringEnabled.ToLowerInvariant()
 . (Join-Path $PSScriptRoot "container-image.ps1")
 
 $runtimeServiceAccount = "plimap-api-prod@$ProjectId.iam.gserviceaccount.com"
@@ -58,6 +64,8 @@ $result = [ordered]@{
     deployCommit          = $DeployCommit
     image                 = $Image
     approvedSourceImage   = ""
+    appCdsEnabled         = $AppCdsEnabled
+    startupMonitoringEnabled = $StartupMonitoringEnabled
     previousRevision      = ""
     candidateRevision     = ""
     candidateVerification = "not-started"
@@ -746,7 +754,9 @@ function Write-EnvironmentFile {
         "KAKAO_REDIRECT_URI: $(ConvertTo-YamlSingleQuoted "$PublicOrigin/oauth/callback/kakao")",
         "GOOGLE_REDIRECT_URI: $(ConvertTo-YamlSingleQuoted "$PublicOrigin/oauth/callback/google")",
         "PROFILE_IMAGE_BUCKET: $(ConvertTo-YamlSingleQuoted $ProfileImageBucket)",
-        "PROFILE_IMAGE_PUBLIC_BASE_URL: 'https://storage.googleapis.com'"
+        "PROFILE_IMAGE_PUBLIC_BASE_URL: 'https://storage.googleapis.com'",
+        "PLIMAP_APP_CDS_ENABLED: '$AppCdsEnabled'",
+        "PLIMAP_STARTUP_MONITORING_ENABLED: '$StartupMonitoringEnabled'"
     )
 
     [System.IO.File]::WriteAllLines(
