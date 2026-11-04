@@ -581,6 +581,7 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
                         pin.deletedAt.isNull(),
                         member.deletedAt.isNull(),
                         placeTrack.deletedAt.isNull(),
+                        place.deletedAt.isNull(),
                         pin.isFeedPublic.isTrue()
                 )
                 .orderBy(pin.createdAt.desc(), pin.id.desc())
@@ -785,6 +786,7 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
         return queryFactory
                 .select(pin.id)
                 .from(pin)
+                .join(pin.place, place)
                 .join(pin.placeTrack, placeTrack)
                 .join(pin.member, member)
                 .join(memberFollow)
@@ -803,6 +805,7 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
                         pin.isFeedPublic.isTrue(),
                         member.deletedAt.isNull(),
                         placeTrack.deletedAt.isNull(),
+                        place.deletedAt.isNull(),
                         report.id.isNull(),
                         pin.reportCount.lt(REPORT_HIDE_THRESHOLD)
                 );
