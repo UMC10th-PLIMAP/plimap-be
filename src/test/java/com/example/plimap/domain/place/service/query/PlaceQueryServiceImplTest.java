@@ -30,7 +30,9 @@ import com.example.plimap.domain.place.repository.PlaceSearchHistoryRepository;
 import com.example.plimap.domain.place.repository.query.PlaceBookmarkQueryRepository;
 import com.example.plimap.domain.place.repository.query.PlaceQueryRepository;
 import com.example.plimap.domain.place.repository.query.PopularPlaceQueryRepository;
+import com.example.plimap.domain.place.service.query.impl.PlaceSearchQueryService;
 import com.example.plimap.domain.place.service.query.impl.PlaceQueryServiceImpl;
+import com.example.plimap.domain.place.service.query.impl.PopularPlaceQueryService;
 import com.example.plimap.domain.track.dto.AlbumImage;
 import com.example.plimap.global.external.kakao.KakaoAddressSearchClient;
 import com.example.plimap.global.external.kakao.KakaoClientException;
@@ -86,17 +88,26 @@ class PlaceQueryServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        PopularPlaceQueryService popularPlaceQueryService = new PopularPlaceQueryService(
+                popularPlaceQueryRepository,
+                placeLocationMetadataService,
+                pinQueryService
+        );
+        PlaceSearchQueryService placeSearchQueryService = new PlaceSearchQueryService(
+                placeRepository,
+                kakaoAddressSearchClient,
+                kakaoPlaceSearchClient,
+                pinQueryService
+        );
         placeQueryService = new PlaceQueryServiceImpl(
                 placeRepository,
                 placeBookmarkRepository,
                 placeSearchHistoryRepository,
                 placeQueryRepository,
                 placeBookmarkQueryRepository,
-                popularPlaceQueryRepository,
-                placeLocationMetadataService,
-                kakaoAddressSearchClient,
-                kakaoPlaceSearchClient,
-                pinQueryService
+                pinQueryService,
+                popularPlaceQueryService,
+                placeSearchQueryService
         );
         lenient().when(kakaoAddressSearchClient.search(any()))
                 .thenReturn(new KakaoAddressSearchResponse(List.of()));
