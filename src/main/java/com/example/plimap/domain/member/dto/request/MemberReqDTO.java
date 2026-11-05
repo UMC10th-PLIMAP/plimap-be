@@ -32,4 +32,12 @@ public class MemberReqDTO {
             String introduction
     ) {
     }
+
+    public record Withdraw(
+            @Schema(description = """
+                    탈퇴 응답이 AUTH_APPLE_REAUTH_REQUIRED / AUTH_GOOGLE_REAUTH_REQUIRED였을 때만 보냅니다.
+                    해당 provider로 다시 로그인해 받은 애플 authorizationCode 또는 구글 serverAuthCode입니다.""")
+            String authorizationCode
+    ) {
+    }
 }

@@ -57,6 +57,9 @@ $secretMap = [ordered]@{
     GOOGLE_CLIENT_ID      = "plimap-prod-google-client-id"
     GOOGLE_CLIENT_SECRET  = "plimap-prod-google-client-secret"
     YOUTUBE_API_KEY       = "plimap-prod-youtube-api-key"
+    KAKAO_ADMIN_KEY       = "plimap-prod-kakao-admin-key"
+    APPLE_PRIVATE_KEY     = "plimap-prod-apple-private-key"
+    SOCIAL_TOKEN_ENCRYPTION_KEY = "plimap-prod-social-token-encryption-key"
 }
 
 $result = [ordered]@{

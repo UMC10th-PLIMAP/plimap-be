@@ -25,7 +25,7 @@ public interface MemberCommandService {
 
     void decreaseReportCount(Long memberId);
 
-    void withdraw(Long memberId);
+    void withdraw(Long memberId, String reauthCode);
 
     boolean applySanction(Long memberId, SuspensionPeriod period, ReportCategory reasonCategory, String reasonDetail);
 

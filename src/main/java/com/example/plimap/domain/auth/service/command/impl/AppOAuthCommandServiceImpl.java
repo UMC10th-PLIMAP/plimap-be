@@ -7,10 +7,12 @@ import com.example.plimap.domain.auth.dto.OAuthDTO;
 import com.example.plimap.domain.auth.dto.request.AuthReqDTO;
 import com.example.plimap.domain.auth.dto.response.AuthResponse;
 import com.example.plimap.domain.auth.entity.AuthMember;
+import com.example.plimap.domain.auth.enums.AuthProvider;
 import com.example.plimap.domain.auth.exception.AuthErrorCode;
 import com.example.plimap.domain.auth.exception.AuthException;
 import com.example.plimap.domain.auth.exception.SanctionedMemberAuthenticationException;
 import com.example.plimap.domain.auth.service.command.AppOAuthCommandService;
+import com.example.plimap.domain.auth.service.command.SocialAccountCommandService;
 import com.example.plimap.domain.member.entity.Member;
 import com.example.plimap.domain.member.enums.MemberStatus;
 import com.example.plimap.domain.member.exception.MemberErrorCode;
@@ -31,12 +33,12 @@ import org.springframework.stereotype.Service;
 @Service
 public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
 
-    private static final String GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
+    static final String GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
     // 구글 ID 토큰의 iss는 https://accounts.google.com / accounts.google.com 둘 다 유효하다.
-    private static final Set<String> GOOGLE_ISSUERS = Set.of(
+    static final Set<String> GOOGLE_ISSUERS = Set.of(
             "https://accounts.google.com", "accounts.google.com");
-    private static final String APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys";
-    private static final Set<String> APPLE_ISSUERS = Set.of("https://appleid.apple.com");
+    static final String APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys";
+    static final Set<String> APPLE_ISSUERS = Set.of("https://appleid.apple.com");
 
     private final CustomOAuthService customOAuthService;
     private final KakaoUserApiClient kakaoUserApiClient;
@@ -45,6 +47,7 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
     private final RefreshTokenService refreshTokenService;
     private final AppLoginNonceService appLoginNonceService;
     private final MemberRepository memberRepository;
+    private final SocialAccountCommandService socialAccountCommandService;
     private final String googleAppClientId;
     private final String appleAppClientId;
 
@@ -56,6 +59,7 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
             RefreshTokenService refreshTokenService,
             AppLoginNonceService appLoginNonceService,
             MemberRepository memberRepository,
+            SocialAccountCommandService socialAccountCommandService,
             @Value("${app-oauth.google.client-id}") String googleAppClientId,
             @Value("${app-oauth.apple.client-id}") String appleAppClientId
     ) {
@@ -66,6 +70,7 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
         this.refreshTokenService = refreshTokenService;
         this.appLoginNonceService = appLoginNonceService;
         this.memberRepository = memberRepository;
+        this.socialAccountCommandService = socialAccountCommandService;
         this.googleAppClientId = googleAppClientId;
         this.appleAppClientId = appleAppClientId;
     }
@@ -82,6 +87,13 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
             member = customOAuthService.resolveMember(request.provider(), dto);
         } catch (SanctionedMemberAuthenticationException exception) {
             return AuthResponse.AppLogin.sanctioned(exception);
+        }
+
+        // 탈퇴 시 애플/구글 연결을 끊을 수 있도록 refresh token을 받아 둔다(카카오는 어드민 키로 끊어 불필요).
+        if (request.provider() != AuthProvider.KAKAO
+                && request.authorizationCode() != null && !request.authorizationCode().isBlank()) {
+            socialAccountCommandService.saveRefreshTokenByCode(
+                    member.getId(), request.provider(), request.authorizationCode());
         }
 
         AuthMember authMember = new AuthMember(member);
