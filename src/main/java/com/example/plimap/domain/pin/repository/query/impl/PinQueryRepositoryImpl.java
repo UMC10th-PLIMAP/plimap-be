@@ -28,6 +28,7 @@ import com.querydsl.core.types.OrderSpecifier;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.JPAExpressions;
+import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
@@ -545,52 +546,23 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
     public Pagination<PinResponse.FriendPin> getFriendRecentPinList(Long memberId, String cursor, Integer pageSize) {
         CursorInfo cursorInfo = parseCursor(cursor, null);
 
-        List<Long> pinIds = queryFactory
-                .select(pin.id)
-                .from(pin)
-                .join(pin.placeTrack, placeTrack)
-                .join(pin.member, member)
-                .join(memberFollow)
-                .on(
-                    memberFollow.follower.id.eq(memberId)
-                            .and(memberFollow.following.id.eq(pin.member.id))
-                )
+        List<Long> pinIds = createFriendPinIdQuery(memberId)
                 .where(
                         cursorCondition(cursorInfo, null),
-                        pin.deletedAt.isNull(),
-                        pin.createdAt.goe(Instant.now().minus(24, ChronoUnit.HOURS)),
-                        pin.isFeedPublic.isTrue(),
-                        member.deletedAt.isNull(),
-                        placeTrack.deletedAt.isNull()
+                        pin.createdAt.goe(Instant.now().minus(24, ChronoUnit.HOURS))
                 )
                 .orderBy(pin.createdAt.desc(), pin.id.desc())
                 .limit(pageSize + 1)
                 .fetch();
 
         boolean fallback = pinIds.isEmpty() && cursor == null;
-
         boolean hasNext = pinIds.size() > pageSize;
 
         if (fallback) {
-                pinIds = queryFactory
-                        .select(pin.id)
-                        .from(pin)
-                        .join(pin.placeTrack, placeTrack)
-                        .join(pin.member, member)
-                        .join(memberFollow)
-                        .on(
-                            memberFollow.follower.id.eq(memberId)
-                                    .and(memberFollow.following.id.eq(pin.member.id))
-                        )
-                        .where(
-                                pin.deletedAt.isNull(),
-                                pin.isFeedPublic.isTrue(),
-                                member.deletedAt.isNull(),
-                                placeTrack.deletedAt.isNull()
-                        )
-                        .orderBy(pin.createdAt.desc(), pin.id.desc())
-                        .limit(10)
-                        .fetch();
+            pinIds = createFriendPinIdQuery(memberId)
+                    .orderBy(pin.createdAt.desc(), pin.id.desc())
+                    .limit(10)
+                    .fetch();
 
             hasNext = false;
         } else if (hasNext) {
@@ -600,11 +572,6 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
         List<Pin> pins = queryFactory
                 .selectDistinct(pin)
                 .from(pin)
-                .join(memberFollow)
-                .on(
-                        memberFollow.follower.id.eq(memberId)
-                                .and(memberFollow.following.id.eq(pin.member.id))
-                )
                 .join(pin.placeTrack, placeTrack).fetchJoin()
                 .join(pin.place, place).fetchJoin()
                 .join(placeTrack.track, track).fetchJoin()
@@ -614,6 +581,7 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
                         pin.deletedAt.isNull(),
                         member.deletedAt.isNull(),
                         placeTrack.deletedAt.isNull(),
+                        place.deletedAt.isNull(),
                         pin.isFeedPublic.isTrue()
                 )
                 .orderBy(pin.createdAt.desc(), pin.id.desc())
@@ -812,5 +780,34 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
                 false,
                 pageSize
         );
+    }
+
+    private JPAQuery<Long> createFriendPinIdQuery(Long memberId) {
+        return queryFactory
+                .select(pin.id)
+                .from(pin)
+                .join(pin.place, place)
+                .join(pin.placeTrack, placeTrack)
+                .join(pin.member, member)
+                .join(memberFollow)
+                .on(
+                        memberFollow.follower.id.eq(memberId)
+                                .and(memberFollow.following.id.eq(pin.member.id))
+                )
+                .leftJoin(report)
+                .on(
+                        report.reporter.id.eq(memberId),
+                        report.reportedPin.eq(pin)
+                                .or(report.reportedMember.eq(pin.member))
+                )
+                .where(
+                        pin.deletedAt.isNull(),
+                        pin.isFeedPublic.isTrue(),
+                        member.deletedAt.isNull(),
+                        placeTrack.deletedAt.isNull(),
+                        place.deletedAt.isNull(),
+                        report.id.isNull(),
+                        pin.reportCount.lt(REPORT_HIDE_THRESHOLD)
+                );
     }
 }

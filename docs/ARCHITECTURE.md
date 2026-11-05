@@ -87,6 +87,7 @@ com.example.plimap/
 │   ├── config/                     # 설정 클래스
 │   ├── entity/                     # BaseEntity, SoftDeleteEntity 등 공통 엔티티
 │   ├── logging/                    # 공통 HTTP 오류 로그
+│   ├── monitoring/                 # 선택적 애플리케이션 시작 진단
 │   ├── security/                   # 인증/인가 보안 설정
 │   ├── swagger/                    # Swagger/OpenAPI 설정
 │   └── external/                   # 외부 시스템 연동 공통 영역
@@ -107,6 +108,10 @@ com.example.plimap/
 ### 3. Place
 
 장소, 위치, 검색 기록과 북마크 관련 기능을 담당합니다.
+
+`PlaceQueryService`는 Controller와 PIN·Track·Place Command가 사용하는 공개 조회 계약입니다.
+구현체는 이 계약을 유지하면서 장소 검색을 `PlaceSearchQueryService`, 인기 장소 조회를
+`PopularPlaceQueryService`에 위임합니다. 상세·북마크·최근 검색 조회는 기존 구현체에 남겨 둡니다.
 
 ### 4. Track
 
