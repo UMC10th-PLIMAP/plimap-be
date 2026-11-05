@@ -788,6 +788,59 @@ class PinQueryRepositoryImplTest {
     }
 
     @Test
+    void 홈화면_피드_조회시_내가_차단한_사용자의_모든_핀은_제외된다() {
+        // given
+        reportRepository.save(
+                Report.createPinReport(
+                        member1,
+                        pin2,
+                        ReportCategory.COMMERCIAL_OR_PROMOTIONAL,
+                        null
+                )
+        );
+
+        // when
+        Pagination<PinResponse.Feed> response =
+                pinQueryRepository.findFeedListByMemberId(
+                        member1.getId(), null, null, 10, request
+                );
+
+        // then
+        assertThat(response.data())
+                .extracting(PinResponse.Feed::pinId)
+                .doesNotContain(
+                        pin2.getId(),
+                        pin3.getId(),
+                        pin4.getId()
+                );
+    }
+
+    @Test
+    void 홈화면_피드_조회시_내가_차단한_핀은_제외된다() {
+        // given
+        reportRepository.save(
+                Report.createPinReport(
+                        member1,
+                        pin2,
+                        ReportCategory.COMMERCIAL_OR_PROMOTIONAL,
+                        null
+                )
+        );
+
+        // when
+        Pagination<PinResponse.Feed> response =
+                pinQueryRepository.findFeedListByMemberId(
+                        member1.getId(), null, null, 10, request
+                );
+
+        // then
+        assertThat(response.data())
+                .extracting(PinResponse.Feed::pinId)
+                .doesNotContain(pin2.getId())
+                .contains(pin1.getId());
+    }
+
+    @Test
     void 특정_사용자가_작성한_핀_개수를_반환한다() {
         // when
         long countMember1Pin = pinQueryRepository.countPinsByMemberId(member1.getId());
