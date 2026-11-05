@@ -37,9 +37,14 @@ class AppLoginNonceServiceIntegrationTest {
 
     @Test
     void 해시하지_않은_원래_nonce로는_소비할_수_없다() {
+        // given
         String nonce = appLoginNonceService.issue();
 
-        assertThat(appLoginNonceService.consume(nonce)).isFalse();
+        // when
+        boolean consumed = appLoginNonceService.consume(nonce);
+
+        // then
+        assertThat(consumed).isFalse();
     }
 
     @Test
