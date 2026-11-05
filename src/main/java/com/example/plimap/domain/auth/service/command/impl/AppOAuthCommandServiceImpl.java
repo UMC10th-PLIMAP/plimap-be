@@ -134,8 +134,8 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
         return new AuthResponse.AppTokenReissue(newAccessToken, newRefreshToken);
     }
 
-    // Apple 로그인 시도 전에 앱이 미리 받아가는 1회용 nonce. Apple 인증 요청에 그대로 실어
-    // 보내면 ID 토큰의 nonce claim에 담겨 돌아오고, toAppleDTO()가 로그인 시점에 소비한다.
+    // Apple 로그인 시도 전에 앱이 미리 받아가는 1회용 nonce. 앱이 SHA-256(hex)으로 해시해서 Apple 인증
+    // 요청에 실어 보내면 ID 토큰의 nonce claim에 해시 값이 담겨 돌아오고, toAppleDTO()가 로그인 시점에 소비한다.
     @Override
     public AuthResponse.AppLoginNonce issueNonce() {
         return new AuthResponse.AppLoginNonce(appLoginNonceService.issue());
@@ -190,7 +190,7 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
     private AppleDTO toAppleDTO(String idToken) {
         Claims claims = idTokenVerifier.verify(APPLE_JWKS_URL, APPLE_ISSUERS, appleAppClientId, idToken);
         // 정상 서명된 ID 토큰이라도 탈취되면 만료 전까지 재전송(replay)될 수 있으므로, 로그인
-        // 시도마다 서버가 미리 발급한 1회용 nonce가 토큰에 그대로 담겨 왔는지 확인하고 소비한다.
+        // 시도마다 서버가 미리 발급한 1회용 nonce(의 SHA-256 해시)가 토큰에 담겨 왔는지 확인하고 소비한다.
         // 두 번째로 같은 토큰이 들어오면 nonce가 이미 소비돼 있어 거부된다.
         String nonce = claims.get("nonce", String.class);
         if (!appLoginNonceService.consume(nonce)) {
