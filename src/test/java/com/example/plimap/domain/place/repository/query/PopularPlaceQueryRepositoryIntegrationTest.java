@@ -43,6 +43,7 @@ class PopularPlaceQueryRepositoryIntegrationTest {
 
         List<PopularPlaceCandidate> result =
                 popularPlaceQueryRepository.findNearbyPopularPlaces(
+                        1L,
                         LATITUDE,
                         LONGITUDE
                 );
@@ -73,6 +74,7 @@ class PopularPlaceQueryRepositoryIntegrationTest {
 
         List<PopularPlaceCandidate> result =
                 popularPlaceQueryRepository.findNearbyPopularPlaces(
+                        1L,
                         LATITUDE,
                         LONGITUDE
                 );
@@ -110,6 +112,7 @@ class PopularPlaceQueryRepositoryIntegrationTest {
 
         List<PopularPlaceCandidate> result =
                 popularPlaceQueryRepository.findGlobalPopularPlaces(
+                        1L,
                         LATITUDE,
                         LONGITUDE
                 );
@@ -146,14 +149,17 @@ class PopularPlaceQueryRepositoryIntegrationTest {
 
         List<PopularPlaceCandidate> region3 =
                 popularPlaceQueryRepository.findRegion3PopularPlaces(
+                        1L,
                         "1168010100", LATITUDE, LONGITUDE
                 );
         List<PopularPlaceCandidate> region2 =
                 popularPlaceQueryRepository.findRegion2PopularPlaces(
+                        1L,
                         "서울특별시", "강남구", LATITUDE, LONGITUDE
                 );
         List<PopularPlaceCandidate> region1 =
                 popularPlaceQueryRepository.findRegion1PopularPlaces(
+                        1L,
                         "서울특별시", LATITUDE, LONGITUDE
                 );
 
@@ -176,22 +182,26 @@ class PopularPlaceQueryRepositoryIntegrationTest {
 
         List<PopularPlaceCandidate> nearby =
                 popularPlaceQueryRepository.findNearbyPopularPlaces(
+                        1L,
                         LATITUDE,
                         LONGITUDE
                 );
         List<PopularPlaceCandidate> global =
                 popularPlaceQueryRepository.findGlobalPopularPlaces(
+                        1L,
                         LATITUDE,
                         LONGITUDE
                 );
         List<PopularPlaceCandidate> region3 =
                 popularPlaceQueryRepository.findRegion3PopularPlaces(
+                        1L,
                         "1168010100",
                         LATITUDE,
                         LONGITUDE
                 );
         List<PopularPlaceCandidate> region2 =
                 popularPlaceQueryRepository.findRegion2PopularPlaces(
+                        1L,
                         "서울특별시",
                         "강남구",
                         LATITUDE,
@@ -199,6 +209,7 @@ class PopularPlaceQueryRepositoryIntegrationTest {
                 );
         List<PopularPlaceCandidate> region1 =
                 popularPlaceQueryRepository.findRegion1PopularPlaces(
+                        1L,
                         "서울특별시",
                         LATITUDE,
                         LONGITUDE
@@ -219,6 +230,142 @@ class PopularPlaceQueryRepositoryIntegrationTest {
                 .containsExactlyElementsOf(idsByDistance.subList(0, 6));
         assertThat(region1).extracting(PopularPlaceCandidate::placeId)
                 .containsExactlyElementsOf(idsByDistance.subList(0, 6));
+    }
+
+    @Test
+    void 신고한_PIN이나_회원의_PIN은_모든_인기_장소_범위에서_제외한다() {
+        Long viewerId = insertMember();
+        Long otherViewerId = insertMember();
+        Long pinReportedOwnerId = insertMember();
+        Long memberReportedOwnerId = insertMember();
+        Long visibleOwnerId = insertMember();
+
+        Long pinReportedPlaceId = insertPlace("신고한 PIN만 있는 장소", 10.0, 0.0, false);
+        Long memberReportedPlaceId = insertPlace("신고한 회원 PIN만 있는 장소", 20.0, 0.0, false);
+        Long mixedPlaceId = insertPlace("볼 수 있는 PIN도 있는 장소", 30.0, 0.0, false);
+        Long sameOwnerPlaceId = insertPlace("같은 작성자의 다른 PIN", 40.0, 0.0, false);
+        Long reportedPinId = insertPinForMember(pinReportedPlaceId, pinReportedOwnerId);
+        insertPinForMember(memberReportedPlaceId, memberReportedOwnerId);
+        insertPinForMember(mixedPlaceId, memberReportedOwnerId);
+        insertPinForMember(mixedPlaceId, visibleOwnerId);
+        insertPinForMember(sameOwnerPlaceId, pinReportedOwnerId);
+        insertPinReport(viewerId, reportedPinId);
+        insertMemberReport(viewerId, memberReportedOwnerId);
+
+        List<List<PopularPlaceCandidate>> viewerResults = List.of(
+                popularPlaceQueryRepository.findNearbyPopularPlaces(
+                        viewerId, LATITUDE, LONGITUDE
+                ),
+                popularPlaceQueryRepository.findRegion3PopularPlaces(
+                        viewerId, "1168010100", LATITUDE, LONGITUDE
+                ),
+                popularPlaceQueryRepository.findRegion2PopularPlaces(
+                        viewerId, "서울특별시", "강남구", LATITUDE, LONGITUDE
+                ),
+                popularPlaceQueryRepository.findRegion1PopularPlaces(
+                        viewerId, "서울특별시", LATITUDE, LONGITUDE
+                ),
+                popularPlaceQueryRepository.findGlobalPopularPlaces(
+                        viewerId, LATITUDE, LONGITUDE
+                )
+        );
+
+        for (List<PopularPlaceCandidate> result : viewerResults) {
+            assertThat(result).extracting(PopularPlaceCandidate::placeId)
+                    .containsExactlyInAnyOrder(mixedPlaceId, sameOwnerPlaceId)
+                    .doesNotContain(pinReportedPlaceId, memberReportedPlaceId);
+            assertThat(result).extracting(PopularPlaceCandidate::pinCount)
+                    .containsOnly(1L);
+        }
+
+        List<PopularPlaceCandidate> otherViewerResults =
+                popularPlaceQueryRepository.findGlobalPopularPlaces(
+                        otherViewerId, LATITUDE, LONGITUDE
+                );
+        assertThat(otherViewerResults).extracting(PopularPlaceCandidate::placeId)
+                .contains(pinReportedPlaceId, memberReportedPlaceId, mixedPlaceId, sameOwnerPlaceId);
+        assertThat(otherViewerResults).filteredOn(
+                candidate -> candidate.placeId().equals(mixedPlaceId)
+        ).singleElement().extracting(PopularPlaceCandidate::pinCount).isEqualTo(2L);
+    }
+
+    @Test
+    void 신고_제외_후에_정렬과_최대_6개_제한을_적용한다() {
+        Long viewerId = insertMember();
+        Long ownerId = insertMember();
+        Long hiddenPlaceId = insertPlace("숨길 가장 가까운 장소", 10.0, 0.0, false);
+        Long hiddenPinId = insertPinForMember(hiddenPlaceId, ownerId);
+        insertPinReport(viewerId, hiddenPinId);
+
+        List<Long> visiblePlaceIds = new ArrayList<>();
+        for (int index = 1; index <= 7; index++) {
+            Long placeId = insertPlace("보이는 장소 " + index, index * 20.0, 0.0, false);
+            visiblePlaceIds.add(placeId);
+            insertPinForMember(placeId, ownerId);
+        }
+
+        List<PopularPlaceCandidate> result =
+                popularPlaceQueryRepository.findNearbyPopularPlaces(
+                        viewerId, LATITUDE, LONGITUDE
+                );
+
+        assertThat(result).hasSize(6);
+        assertThat(result).extracting(PopularPlaceCandidate::placeId)
+                .containsExactlyElementsOf(visiblePlaceIds.subList(0, 6));
+    }
+
+    @Test
+    void 신고가_10회_누적된_PIN만_있는_장소는_추천하지_않는다() {
+        Long viewerId = insertMember();
+        Long ownerId = insertMember();
+        Long placeId = insertPlace("자동 숨김 PIN만 있는 장소", 10.0, 0.0, false);
+        Long pinId = insertPinForMember(placeId, ownerId);
+        jdbcTemplate.update("UPDATE pin SET report_count = 10 WHERE id = ?", pinId);
+
+        List<PopularPlaceCandidate> result =
+                popularPlaceQueryRepository.findGlobalPopularPlaces(
+                        viewerId, LATITUDE, LONGITUDE
+                );
+
+        assertThat(result).isEmpty();
+    }
+
+    private Long insertMember() {
+        return jdbcTemplate.queryForObject(
+                "INSERT INTO member DEFAULT VALUES RETURNING id", Long.class
+        );
+    }
+
+    private Long insertPinForMember(Long placeId, Long memberId) {
+        Long trackId = jdbcTemplate.queryForObject("""
+                INSERT INTO track (provider, provider_track_id, title, artist_name)
+                VALUES ('TEST', ?, '테스트 곡', '테스트 가수')
+                RETURNING id
+                """, Long.class, "popular-reported-" + placeId + "-" + memberId);
+        Long placeTrackId = jdbcTemplate.queryForObject("""
+                INSERT INTO place_track (place_id, track_id)
+                VALUES (?, ?)
+                RETURNING id
+                """, Long.class, placeId, trackId);
+        return jdbcTemplate.queryForObject("""
+                INSERT INTO pin (member_id, place_id, place_track_id, clip_start_ms, introduction)
+                VALUES (?, ?, ?, 0, '')
+                RETURNING id
+                """, Long.class, memberId, placeId, placeTrackId);
+    }
+
+    private void insertPinReport(Long reporterId, Long pinId) {
+        jdbcTemplate.update("""
+                INSERT INTO report (reporter_member_id, reported_pin_id, category)
+                VALUES (?, ?, 'ABUSE_OR_HATE_SPEECH')
+                """, reporterId, pinId);
+    }
+
+    private void insertMemberReport(Long reporterId, Long memberId) {
+        jdbcTemplate.update("""
+                INSERT INTO report (reporter_member_id, reported_member_id, category)
+                VALUES (?, ?, 'ABUSE_OR_HATE_SPEECH')
+                """, reporterId, memberId);
     }
 
     private Long insertPlace(

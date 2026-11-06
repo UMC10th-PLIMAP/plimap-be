@@ -70,6 +70,7 @@ class PopularPlaceListIntegrationTest {
         long trackCount = trackRepository.count();
 
         PlaceResponse.PopularListResult result = placeQueryService.getPopularPlaces(
+                1L,
                 PopularPlaceScope.NEARBY,
                 LATITUDE,
                 LONGITUDE
@@ -85,12 +86,68 @@ class PopularPlaceListIntegrationTest {
                 )
         );
         verify(pinQueryService, times(1))
-                .findRepresentativePlaceTracksByPlaceIds(List.of(placeId));
+                .findRepresentativePlaceTracksByPlaceIds(List.of(placeId), 1L);
         assertThat(placeRepository.count()).isEqualTo(placeCount);
         assertThat(placeBookmarkRepository.count()).isEqualTo(bookmarkCount);
         assertThat(pinRepository.count()).isEqualTo(pinCount);
         assertThat(placeTrackRepository.count()).isEqualTo(placeTrackCount);
         assertThat(trackRepository.count()).isEqualTo(trackCount);
+    }
+
+    @Test
+    void 신고한_PIN이나_회원의_PIN은_장소와_대표_이미지에서_제외한다() {
+        Long viewerId = insertMember();
+        Long reportedMemberId = insertMember();
+        Long visibleMemberId = insertMember();
+        Long pinOnlyMemberId = insertMember();
+        Long mixedPlaceId = insertPlace("남은 PIN이 있는 장소", 100.0);
+        Long reportedTrackId = insertPlaceTrack(
+                mixedPlaceId, "https://image/reported", "reported"
+        );
+        Long visibleTrackId = insertPlaceTrack(
+                mixedPlaceId, "https://image/visible", "visible"
+        );
+        insertPinForMember(mixedPlaceId, reportedTrackId, reportedMemberId, true);
+        insertPinForMember(mixedPlaceId, visibleTrackId, visibleMemberId, false);
+        jdbcTemplate.update(
+                "UPDATE place_track SET like_count = 10 WHERE id = ?", reportedTrackId
+        );
+        jdbcTemplate.update("""
+                INSERT INTO report (reporter_member_id, reported_member_id, category)
+                VALUES (?, ?, 'ABUSE_OR_HATE_SPEECH')
+                """, viewerId, reportedMemberId);
+
+        Long hiddenPlaceId = insertPlace("신고한 PIN만 있는 장소", 50.0);
+        Long hiddenTrackId = insertPlaceTrack(hiddenPlaceId, "https://image/hidden");
+        Long hiddenPinId = insertPinForMember(
+                hiddenPlaceId, hiddenTrackId, pinOnlyMemberId, true
+        );
+        jdbcTemplate.update("""
+                INSERT INTO report (reporter_member_id, reported_pin_id, category)
+                VALUES (?, ?, 'ABUSE_OR_HATE_SPEECH')
+                """, viewerId, hiddenPinId);
+
+        PlaceResponse.PopularListResult result = placeQueryService.getPopularPlaces(
+                viewerId, PopularPlaceScope.NEARBY, LATITUDE, LONGITUDE
+        );
+
+        assertThat(result.items()).containsExactly(
+                new PlaceResponse.PopularListItem(
+                        mixedPlaceId,
+                        "남은 PIN이 있는 장소",
+                        100,
+                        1L,
+                        "https://image/visible"
+                )
+        );
+        verify(pinQueryService, times(1))
+                .findRepresentativePlaceTracksByPlaceIds(List.of(mixedPlaceId), viewerId);
+    }
+
+    private Long insertMember() {
+        return jdbcTemplate.queryForObject(
+                "INSERT INTO member DEFAULT VALUES RETURNING id", Long.class
+        );
     }
 
     private Long insertPlace(String name, double distanceMeters) {
@@ -111,6 +168,10 @@ class PopularPlaceListIntegrationTest {
     }
 
     private Long insertPlaceTrack(Long placeId, String albumImageUrl) {
+        return insertPlaceTrack(placeId, albumImageUrl, "default");
+    }
+
+    private Long insertPlaceTrack(Long placeId, String albumImageUrl, String suffix) {
         Long trackId = jdbcTemplate.queryForObject("""
                 INSERT INTO track (
                     provider,
@@ -121,7 +182,7 @@ class PopularPlaceListIntegrationTest {
                 )
                 VALUES ('TEST', ?, '테스트 곡', '테스트 가수', ?)
                 RETURNING id
-                """, Long.class, "popular-service-track-" + placeId, albumImageUrl);
+                """, Long.class, "popular-service-track-" + placeId + "-" + suffix, albumImageUrl);
         return jdbcTemplate.queryForObject("""
                 INSERT INTO place_track (place_id, track_id)
                 VALUES (?, ?)
@@ -130,11 +191,13 @@ class PopularPlaceListIntegrationTest {
     }
 
     private void insertPin(Long placeId, Long placeTrackId, boolean feedPublic) {
-        Long memberId = jdbcTemplate.queryForObject(
-                "INSERT INTO member DEFAULT VALUES RETURNING id",
-                Long.class
-        );
-        jdbcTemplate.update("""
+        insertPinForMember(placeId, placeTrackId, insertMember(), feedPublic);
+    }
+
+    private Long insertPinForMember(
+            Long placeId, Long placeTrackId, Long memberId, boolean feedPublic
+    ) {
+        return jdbcTemplate.queryForObject("""
                 INSERT INTO pin (
                     member_id,
                     place_id,
@@ -144,6 +207,7 @@ class PopularPlaceListIntegrationTest {
                     is_feed_public
                 )
                 VALUES (?, ?, ?, 0, '', ?)
-                """, memberId, placeId, placeTrackId, feedPublic);
+                RETURNING id
+                """, Long.class, memberId, placeId, placeTrackId, feedPublic);
     }
 }

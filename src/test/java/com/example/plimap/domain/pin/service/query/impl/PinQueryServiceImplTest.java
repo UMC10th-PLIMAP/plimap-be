@@ -428,7 +428,7 @@ class PinQueryServiceImplTest {
     void 장소_아이디_목록으로_대표_pinTrack_이미지를_조회한다() {
         // given
         List<Long> placeIds = new ArrayList<>(List.of(1L,2L));
-        when(pinQueryRepository.findRepresentativePlaceTracksByPlaceIds(placeIds))
+        when(pinQueryRepository.findRepresentativePlaceTracksByPlaceIds(placeIds, 1L))
                 .thenReturn(
                         Map.of(
                                 1L, AlbumImage.builder().albumImageUrl("url1").build(),
@@ -437,12 +437,12 @@ class PinQueryServiceImplTest {
                 );
 
         // when
-        Map<Long, AlbumImage> result = pinQueryService.findRepresentativePlaceTracksByPlaceIds(placeIds);
+        Map<Long, AlbumImage> result = pinQueryService.findRepresentativePlaceTracksByPlaceIds(placeIds, 1L);
 
         // then
         assertThat(result.get(1L).albumImageUrl()).isEqualTo("url1");
         assertThat(result.get(2L).albumImageUrl()).isEqualTo("url2");
-        verify(pinQueryRepository).findRepresentativePlaceTracksByPlaceIds(placeIds);
+        verify(pinQueryRepository).findRepresentativePlaceTracksByPlaceIds(placeIds, 1L);
     }
 
     @Test

@@ -120,15 +120,18 @@ class PlaceQueryServiceImplTest {
                 new PopularPlaceCandidate(2L, "URL 없는 장소", 120.4, 2L),
                 new PopularPlaceCandidate(3L, "대표곡 없는 장소", 200.2, 1L)
         );
-        when(popularPlaceQueryRepository.findNearbyPopularPlaces(37.5283, 126.9326))
+        when(popularPlaceQueryRepository.findNearbyPopularPlaces(
+                1L,
+                37.5283, 126.9326))
                 .thenReturn(candidates);
-        when(pinQueryService.findRepresentativePlaceTracksByPlaceIds(List.of(1L, 2L, 3L)))
+        when(pinQueryService.findRepresentativePlaceTracksByPlaceIds(List.of(1L, 2L, 3L), 1L))
                 .thenReturn(Map.of(
                         1L, new AlbumImage("https://image/1"),
                         2L, new AlbumImage(null)
                 ));
 
         PlaceResponse.PopularListResult result = placeQueryService.getPopularPlaces(
+                1L,
                 PopularPlaceScope.NEARBY,
                 37.5283,
                 126.9326
@@ -148,9 +151,11 @@ class PlaceQueryServiceImplTest {
         assertThat(result.scopeLevel()).isNull();
         assertThat(result.scopeName()).isNull();
         verify(popularPlaceQueryRepository)
-                .findNearbyPopularPlaces(37.5283, 126.9326);
+                .findNearbyPopularPlaces(
+                        1L,
+                        37.5283, 126.9326);
         verify(pinQueryService)
-                .findRepresentativePlaceTracksByPlaceIds(List.of(1L, 2L, 3L));
+                .findRepresentativePlaceTracksByPlaceIds(List.of(1L, 2L, 3L), 1L);
     }
 
     @Test
@@ -159,14 +164,14 @@ class PlaceQueryServiceImplTest {
         when(placeLocationMetadataService.getAdministrativeRegion(37.5283, 126.9326))
                 .thenReturn(region());
         when(popularPlaceQueryRepository.findRegion3PopularPlaces(
+                1L,
                 "1168010100", 37.5283, 126.9326
         )).thenReturn(candidates);
-        when(pinQueryService.findRepresentativePlaceTracksByPlaceIds(
-                List.of(1L, 2L, 3L, 4L, 5L, 6L)
-        ))
+        when(pinQueryService.findRepresentativePlaceTracksByPlaceIds(List.of(1L, 2L, 3L, 4L, 5L, 6L), 1L))
                 .thenReturn(Map.of());
 
         PlaceResponse.PopularListResult result = placeQueryService.getPopularPlaces(
+                1L,
                 PopularPlaceScope.GLOBAL,
                 37.5283,
                 126.9326
@@ -176,6 +181,7 @@ class PlaceQueryServiceImplTest {
         assertThat(result.scopeName()).isEqualTo("역삼1동");
         assertThat(result.items()).hasSize(6);
         verify(popularPlaceQueryRepository).findRegion3PopularPlaces(
+                1L,
                 "1168010100", 37.5283, 126.9326
         );
     }
@@ -187,16 +193,17 @@ class PlaceQueryServiceImplTest {
         when(placeLocationMetadataService.getAdministrativeRegion(37.5283, 126.9326))
                 .thenReturn(region());
         when(popularPlaceQueryRepository.findRegion3PopularPlaces(
+                1L,
                 "1168010100", 37.5283, 126.9326
         )).thenReturn(region3Candidates);
         when(popularPlaceQueryRepository.findRegion2PopularPlaces(
+                1L,
                 "서울특별시", "강남구", 37.5283, 126.9326
         )).thenReturn(region2Candidates);
-        when(pinQueryService.findRepresentativePlaceTracksByPlaceIds(
-                List.of(11L, 12L, 13L, 14L, 15L, 16L)
-        )).thenReturn(Map.of());
+        when(pinQueryService.findRepresentativePlaceTracksByPlaceIds(List.of(11L, 12L, 13L, 14L, 15L, 16L), 1L)).thenReturn(Map.of());
 
         PlaceResponse.PopularListResult result = placeQueryService.getPopularPlaces(
+                1L,
                 PopularPlaceScope.GLOBAL,
                 37.5283,
                 126.9326
@@ -206,9 +213,7 @@ class PlaceQueryServiceImplTest {
         assertThat(result.scopeName()).isEqualTo("강남구");
         assertThat(result.items()).extracting(PlaceResponse.PopularListItem::placeId)
                 .containsExactly(11L, 12L, 13L, 14L, 15L, 16L);
-        verify(pinQueryService).findRepresentativePlaceTracksByPlaceIds(
-                List.of(11L, 12L, 13L, 14L, 15L, 16L)
-        );
+        verify(pinQueryService).findRepresentativePlaceTracksByPlaceIds(List.of(11L, 12L, 13L, 14L, 15L, 16L), 1L);
     }
 
     @Test
@@ -217,19 +222,21 @@ class PlaceQueryServiceImplTest {
         when(placeLocationMetadataService.getAdministrativeRegion(37.5283, 126.9326))
                 .thenReturn(region());
         when(popularPlaceQueryRepository.findRegion3PopularPlaces(
+                1L,
                 "1168010100", 37.5283, 126.9326
         )).thenReturn(List.of());
         when(popularPlaceQueryRepository.findRegion2PopularPlaces(
+                1L,
                 "서울특별시", "강남구", 37.5283, 126.9326
         )).thenReturn(List.of());
         when(popularPlaceQueryRepository.findRegion1PopularPlaces(
+                1L,
                 "서울특별시", 37.5283, 126.9326
         )).thenReturn(region1Candidates);
-        when(pinQueryService.findRepresentativePlaceTracksByPlaceIds(
-                List.of(21L, 22L, 23L, 24L, 25L, 26L)
-        )).thenReturn(Map.of());
+        when(pinQueryService.findRepresentativePlaceTracksByPlaceIds(List.of(21L, 22L, 23L, 24L, 25L, 26L), 1L)).thenReturn(Map.of());
 
         PlaceResponse.PopularListResult result = placeQueryService.getPopularPlaces(
+                1L,
                 PopularPlaceScope.GLOBAL, 37.5283, 126.9326
         );
 
@@ -242,10 +249,13 @@ class PlaceQueryServiceImplTest {
     void 행정동_변환_결과와_전국_결과가_모두_없으면_GLOBAL_빈_목록을_반환한다() {
         when(placeLocationMetadataService.getAdministrativeRegion(37.5283, 126.9326))
                 .thenReturn(new PlaceAdministrativeRegion(null, null, null, null));
-        when(popularPlaceQueryRepository.findGlobalPopularPlaces(37.5283, 126.9326))
+        when(popularPlaceQueryRepository.findGlobalPopularPlaces(
+                1L,
+                37.5283, 126.9326))
                 .thenReturn(List.of());
 
         PlaceResponse.PopularListResult result = placeQueryService.getPopularPlaces(
+                1L,
                 PopularPlaceScope.GLOBAL, 37.5283, 126.9326
         );
 
@@ -253,7 +263,9 @@ class PlaceQueryServiceImplTest {
         assertThat(result.scopeName()).isEqualTo("전국");
         assertThat(result.items()).isEmpty();
         verify(popularPlaceQueryRepository)
-                .findGlobalPopularPlaces(37.5283, 126.9326);
+                .findGlobalPopularPlaces(
+                        1L,
+                        37.5283, 126.9326);
         verifyNoInteractions(pinQueryService);
     }
 
@@ -262,20 +274,26 @@ class PlaceQueryServiceImplTest {
         when(placeLocationMetadataService.getAdministrativeRegion(37.5283, 126.9326))
                 .thenReturn(region());
         when(popularPlaceQueryRepository.findRegion3PopularPlaces(
+                1L,
                 "1168010100", 37.5283, 126.9326
         )).thenReturn(popularCandidates(1L).subList(0, 5));
         when(popularPlaceQueryRepository.findRegion2PopularPlaces(
+                1L,
                 "서울특별시", "강남구", 37.5283, 126.9326
         )).thenReturn(popularCandidates(11L).subList(0, 5));
         when(popularPlaceQueryRepository.findRegion1PopularPlaces(
+                1L,
                 "서울특별시", 37.5283, 126.9326
         )).thenReturn(popularCandidates(21L).subList(0, 5));
-        when(popularPlaceQueryRepository.findGlobalPopularPlaces(37.5283, 126.9326))
+        when(popularPlaceQueryRepository.findGlobalPopularPlaces(
+                1L,
+                37.5283, 126.9326))
                 .thenReturn(List.of(new PopularPlaceCandidate(99L, "전국 결과", 10.2, 9L)));
-        when(pinQueryService.findRepresentativePlaceTracksByPlaceIds(List.of(99L)))
+        when(pinQueryService.findRepresentativePlaceTracksByPlaceIds(List.of(99L), 1L))
                 .thenReturn(Map.of());
 
         PlaceResponse.PopularListResult result = placeQueryService.getPopularPlaces(
+                1L,
                 PopularPlaceScope.GLOBAL, 37.5283, 126.9326
         );
 
@@ -283,7 +301,7 @@ class PlaceQueryServiceImplTest {
         assertThat(result.scopeName()).isEqualTo("전국");
         assertThat(result.items()).extracting(PlaceResponse.PopularListItem::placeId)
                 .containsExactly(99L);
-        verify(pinQueryService).findRepresentativePlaceTracksByPlaceIds(List.of(99L));
+        verify(pinQueryService).findRepresentativePlaceTracksByPlaceIds(List.of(99L), 1L);
     }
 
     @Test
@@ -297,19 +315,20 @@ class PlaceQueryServiceImplTest {
                         null
                 ));
         when(popularPlaceQueryRepository.findRegion1PopularPlaces(
+                1L,
                 "서울특별시", 37.5283, 126.9326
         )).thenReturn(region1Candidates);
-        when(pinQueryService.findRepresentativePlaceTracksByPlaceIds(
-                List.of(31L, 32L, 33L, 34L, 35L, 36L)
-        )).thenReturn(Map.of());
+        when(pinQueryService.findRepresentativePlaceTracksByPlaceIds(List.of(31L, 32L, 33L, 34L, 35L, 36L), 1L)).thenReturn(Map.of());
 
         PlaceResponse.PopularListResult result = placeQueryService.getPopularPlaces(
+                1L,
                 PopularPlaceScope.GLOBAL, 37.5283, 126.9326
         );
 
         assertThat(result.scopeLevel()).isEqualTo(PopularPlaceScopeLevel.REGION1);
         assertThat(result.scopeName()).isEqualTo("서울특별시");
         verify(popularPlaceQueryRepository).findRegion1PopularPlaces(
+                1L,
                 "서울특별시", 37.5283, 126.9326
         );
         verifyNoMoreInteractions(popularPlaceQueryRepository);
@@ -324,6 +343,7 @@ class PlaceQueryServiceImplTest {
                 .thenThrow(exception);
 
         assertThatThrownBy(() -> placeQueryService.getPopularPlaces(
+                1L,
                 PopularPlaceScope.GLOBAL, 37.5283, 126.9326
         )).isSameAs(exception);
 
@@ -339,6 +359,7 @@ class PlaceQueryServiceImplTest {
                 .thenThrow(exception);
 
         assertThatThrownBy(() -> placeQueryService.getPopularPlaces(
+                1L,
                 PopularPlaceScope.GLOBAL, 37.5283, 126.9326
         )).isSameAs(exception);
 
@@ -347,10 +368,13 @@ class PlaceQueryServiceImplTest {
 
     @Test
     void 인기_장소가_없으면_빈_목록을_반환하고_대표_이미지를_조회하지_않는다() {
-        when(popularPlaceQueryRepository.findNearbyPopularPlaces(37.5283, 126.9326))
+        when(popularPlaceQueryRepository.findNearbyPopularPlaces(
+                1L,
+                37.5283, 126.9326))
                 .thenReturn(List.of());
 
         PlaceResponse.PopularListResult result = placeQueryService.getPopularPlaces(
+                1L,
                 PopularPlaceScope.NEARBY,
                 37.5283,
                 126.9326

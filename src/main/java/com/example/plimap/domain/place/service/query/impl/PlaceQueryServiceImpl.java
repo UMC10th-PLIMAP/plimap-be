@@ -48,11 +48,12 @@ public class PlaceQueryServiceImpl implements PlaceQueryService {
 
     @Override
     public PlaceResponse.PopularListResult getPopularPlaces(
+            Long memberId,
             PopularPlaceScope scope,
             double latitude,
             double longitude
     ) {
-        return popularPlaceQueryService.getPopularPlaces(scope, latitude, longitude);
+        return popularPlaceQueryService.getPopularPlaces(memberId, scope, latitude, longitude);
     }
 
     @Override

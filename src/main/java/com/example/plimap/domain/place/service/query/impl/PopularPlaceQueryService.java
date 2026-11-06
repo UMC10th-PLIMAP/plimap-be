@@ -28,6 +28,7 @@ public class PopularPlaceQueryService {
     private final PinQueryService pinQueryService;
 
     public PlaceResponse.PopularListResult getPopularPlaces(
+            Long memberId,
             PopularPlaceScope scope,
             double latitude,
             double longitude
@@ -37,11 +38,12 @@ public class PopularPlaceQueryService {
                     null,
                     null,
                     popularPlaceQueryRepository.findNearbyPopularPlaces(
+                            memberId,
                             latitude,
                             longitude
                     )
             );
-            case GLOBAL -> findPopularPlacesWithRegionalFallback(latitude, longitude);
+            case GLOBAL -> findPopularPlacesWithRegionalFallback(memberId, latitude, longitude);
         };
         List<PopularPlaceCandidate> candidates = selection.candidates();
         if (candidates.isEmpty()) {
@@ -56,7 +58,7 @@ public class PopularPlaceQueryService {
                 .map(PopularPlaceCandidate::placeId)
                 .toList();
         Map<Long, AlbumImage> representativeImages =
-                pinQueryService.findRepresentativePlaceTracksByPlaceIds(placeIds);
+                pinQueryService.findRepresentativePlaceTracksByPlaceIds(placeIds, memberId);
 
         List<PlaceResponse.PopularListItem> items = candidates.stream()
                 .map(candidate -> {
@@ -78,6 +80,7 @@ public class PopularPlaceQueryService {
     }
 
     private PopularPlaceSelection findPopularPlacesWithRegionalFallback(
+            Long memberId,
             double latitude,
             double longitude
     ) {
@@ -87,6 +90,7 @@ public class PopularPlaceQueryService {
         if (region.code() != null && region.eupMyeonDong() != null) {
             List<PopularPlaceCandidate> candidates =
                     popularPlaceQueryRepository.findRegion3PopularPlaces(
+                            memberId,
                             region.code(),
                             latitude,
                             longitude
@@ -103,6 +107,7 @@ public class PopularPlaceQueryService {
         if (region.sido() != null && region.sigungu() != null) {
             List<PopularPlaceCandidate> candidates =
                     popularPlaceQueryRepository.findRegion2PopularPlaces(
+                            memberId,
                             region.sido(),
                             region.sigungu(),
                             latitude,
@@ -120,6 +125,7 @@ public class PopularPlaceQueryService {
         if (region.sido() != null) {
             List<PopularPlaceCandidate> candidates =
                     popularPlaceQueryRepository.findRegion1PopularPlaces(
+                            memberId,
                             region.sido(),
                             latitude,
                             longitude
@@ -136,7 +142,9 @@ public class PopularPlaceQueryService {
         return new PopularPlaceSelection(
                 PopularPlaceScopeLevel.GLOBAL,
                 GLOBAL_SCOPE_NAME,
-                popularPlaceQueryRepository.findGlobalPopularPlaces(latitude, longitude)
+                popularPlaceQueryRepository.findGlobalPopularPlaces(
+                        memberId, latitude, longitude
+                )
         );
     }
 
