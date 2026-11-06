@@ -168,11 +168,13 @@ public class PinQueryServiceImpl implements PinQueryService {
     }
 
     @Override
-    public Map<Long, AlbumImage> findRepresentativePlaceTracksByPlaceIds(List<Long> placeIds) {
+    public Map<Long, AlbumImage> findRepresentativePlaceTracksByPlaceIds(
+            List<Long> placeIds, Long viewerId
+    ) {
         if (placeIds.isEmpty()) {
             return Collections.emptyMap();
         }
-        return pinQueryRepository.findRepresentativePlaceTracksByPlaceIds(placeIds);
+        return pinQueryRepository.findRepresentativePlaceTracksByPlaceIds(placeIds, viewerId);
     }
 
     @Override

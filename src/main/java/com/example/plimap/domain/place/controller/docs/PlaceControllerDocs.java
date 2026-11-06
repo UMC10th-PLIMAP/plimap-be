@@ -26,12 +26,14 @@ public interface PlaceControllerDocs {
 
     @Operation(
             summary = "인기 장소 목록 조회",
-            description = "NEARBY는 반경 제한 없이 활성 PIN이 있는 활성 장소를 실제 거리 ASC, "
-                    + "활성 PIN 수 DESC, placeId ASC 순으로 최대 6개 조회합니다. "
+            description = "요청자가 신고한 PIN과 회원의 PIN 및 신고 누적 10회 이상인 PIN은 "
+                    + "집계와 대표 이미지 선정에서 제외합니다. 조회 가능한 PIN이 없는 장소는 "
+                    + "반환하지 않습니다. NEARBY는 반경 제한 없이 활성 PIN이 있는 활성 장소를 "
+                    + "실제 거리 ASC, 조회 가능한 PIN 수 DESC, placeId ASC 순으로 최대 6개 조회합니다. "
                     + "GLOBAL은 Kakao 행정동(H) 결과를 기준으로 "
                     + "REGION3, REGION2, REGION1, GLOBAL 순서로 범위를 확장하며, 각 단계 결과가 "
                     + "6개 미만이면 이전 결과를 버리고 상위 범위를 다시 조회합니다. H 결과가 "
-                    + "없으면 전국으로 조회합니다. 각 단계는 활성 PIN 수 DESC, 실제 거리 ASC, "
+                    + "없으면 전국으로 조회합니다. 각 단계는 조회 가능한 PIN 수 DESC, 실제 거리 ASC, "
                     + "placeId ASC 순으로 최대 6개를 조회하며 전국 결과는 6개 미만이어도 "
                     + "반환합니다. scopeLevel과 scopeName은 실제 적용 범위이며 NEARBY에서는 "
                     + "null입니다. (Figma 기준 화면: HM-01-01)"
