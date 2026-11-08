@@ -73,7 +73,9 @@ try {
     if (-not $redisReady) { throw 'Isolated Redis TLS did not become ready.' }
     $ready = $false
     for ($attempt = 0; $attempt -lt 60; $attempt++) {
-        & docker exec $database pg_isready -U postgres -d plimap_aot *> $null
+        # The image's temporary initialization server accepts Unix sockets only.
+        # Wait for final TCP startup before creating roles or starting the app.
+        & docker exec $database pg_isready -h 127.0.0.1 -U postgres -d plimap_aot *> $null
         if ($LASTEXITCODE -eq 0) { $ready = $true; break }
         Start-Sleep -Seconds 1
     }
