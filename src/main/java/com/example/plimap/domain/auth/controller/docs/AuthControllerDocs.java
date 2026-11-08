@@ -19,6 +19,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.security.web.csrf.CsrfToken;
 
@@ -88,7 +89,7 @@ public interface AuthControllerDocs {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
             description = "요청 성공(제재 회원은 토큰 없이 제재 정보만 포함)")
-    ApiResponse<AuthResponse.AppLogin> appLogin(AuthReqDTO.AppLogin request);
+    ApiResponse<AuthResponse.AppLogin> appLogin(@Valid AuthReqDTO.AppLogin request);
 
     @Operation(
             summary = "앱 로그인 시도용 nonce 발급",
@@ -189,7 +190,7 @@ public interface AuthControllerDocs {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
             description = "요청 성공")
-    ApiResponse<MemberResponse.Onboarding> onboarding(AuthMember authMember, MemberReqDTO.Onboarding request);
+    ApiResponse<MemberResponse.Onboarding> onboarding(AuthMember authMember, @Valid MemberReqDTO.Onboarding request);
 
     @Operation(
             summary = "약관 동의 여부 조회",
@@ -319,7 +320,7 @@ public interface AuthControllerDocs {
                             }
                     ))
     })
-    ApiResponse<List<TermsResponse.Result>> agreeToTerms(AuthMember authMember, TermsReqDTO.Agree request);
+    ApiResponse<List<TermsResponse.Result>> agreeToTerms(AuthMember authMember, @Valid TermsReqDTO.Agree request);
 
     @Operation(
             summary = "로그아웃",
@@ -428,5 +429,5 @@ public interface AuthControllerDocs {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
             description = "요청 성공")
-    ApiResponse<AuthResponse.AppTokenReissue> appReissue(AuthReqDTO.AppReissue request);
+    ApiResponse<AuthResponse.AppTokenReissue> appReissue(@Valid AuthReqDTO.AppReissue request);
 }

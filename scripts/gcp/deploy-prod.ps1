@@ -34,6 +34,10 @@ param(
     [string]$AppCdsEnabled = "true",
     [ValidateSet("true", "false")]
     [string]$StartupMonitoringEnabled = "false",
+    [ValidateSet("true", "false")]
+    [string]$SpringAotEnabled = "false",
+    [ValidateSet("baseline", "short")]
+    [string]$StartupProbePolicy = "baseline",
     [string]$ResultPath = ""
 )
 
@@ -41,7 +45,11 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $AppCdsEnabled = $AppCdsEnabled.ToLowerInvariant()
 $StartupMonitoringEnabled = $StartupMonitoringEnabled.ToLowerInvariant()
+$SpringAotEnabled = $SpringAotEnabled.ToLowerInvariant()
+$StartupProbePolicy = $StartupProbePolicy.ToLowerInvariant()
 . (Join-Path $PSScriptRoot "container-image.ps1")
+. (Join-Path $PSScriptRoot "startup-experiment.ps1")
+Assert-StartupExperimentCombination -AppCdsEnabled $AppCdsEnabled -SpringAotEnabled $SpringAotEnabled -StartupProbePolicy $StartupProbePolicy
 
 $runtimeServiceAccount = "plimap-api-prod@$ProjectId.iam.gserviceaccount.com"
 $secretMap = [ordered]@{
@@ -69,6 +77,9 @@ $result = [ordered]@{
     approvedSourceImage   = ""
     appCdsEnabled         = $AppCdsEnabled
     startupMonitoringEnabled = $StartupMonitoringEnabled
+    springAotEnabled       = $SpringAotEnabled
+    startupProbePolicy    = $StartupProbePolicy
+    startupProbe          = Get-StartupProbePolicy -Policy $StartupProbePolicy
     previousRevision      = ""
     candidateRevision     = ""
     candidateVerification = "not-started"
@@ -759,6 +770,7 @@ function Write-EnvironmentFile {
         "PROFILE_IMAGE_BUCKET: $(ConvertTo-YamlSingleQuoted $ProfileImageBucket)",
         "PROFILE_IMAGE_PUBLIC_BASE_URL: 'https://storage.googleapis.com'",
         "PLIMAP_APP_CDS_ENABLED: '$AppCdsEnabled'",
+        "PLIMAP_SPRING_AOT_ENABLED: '$SpringAotEnabled'",
         "PLIMAP_STARTUP_MONITORING_ENABLED: '$StartupMonitoringEnabled'"
     )
 
@@ -922,7 +934,7 @@ try {
         "--subnet=$VpcSubnet",
         "--vpc-egress=private-ranges-only",
         "--deploy-health-check",
-        "--startup-probe=httpGet.path=/actuator/health,httpGet.port=8080,initialDelaySeconds=0,timeoutSeconds=3,periodSeconds=5,failureThreshold=24",
+        "--startup-probe=$(Get-StartupProbeArgument -Policy $StartupProbePolicy)",
         "--liveness-probe=httpGet.path=/actuator/health/liveness,httpGet.port=8080,initialDelaySeconds=0,timeoutSeconds=3,periodSeconds=10,failureThreshold=3",
         "--readiness-probe=httpGet.path=/actuator/health/readiness,httpGet.port=8080,timeoutSeconds=3,periodSeconds=5,failureThreshold=3",
         "--env-vars-file=$($environmentFile.FullName)",
