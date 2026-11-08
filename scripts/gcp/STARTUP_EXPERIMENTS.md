@@ -1,4 +1,4 @@
-# Startup 검사와 Spring AOT 순차 비교 실험
+# Startup 검사·Spring AOT·AppCDS 비교 실험
 
 ## 무엇을 비교하는가
 
@@ -9,6 +9,9 @@
 | `baseline` | OFF | OFF | 기존 5초 간격 | 이번 이미지의 비교 기준 |
 | `startup` | OFF | OFF | 4초 간격 | 서버 준비 후 플랫폼이 준비 완료를 확인하는 대기를 줄이는가 |
 | `aot` | OFF | ON | 기존 5초 간격 | 실행 시 Spring 설정을 분석하고 객체 생성 방법을 찾는 작업을 줄이는가 |
+| `aot-quick` | OFF | ON | 3초 간격 | AOT의 내부 준비 단축이 검사 확인·화면 단축으로 이어지는가 |
+| `combined` | ON | ON | 3초 간격 | 세 설정을 함께 적용한 결과는 같은 이미지의 baseline보다 빠른가 |
+| `combined-baseline` | ON | ON | 기존 5초 간격 | 필요 시 조합을 기존 검사 정책으로 확인하는 명시적 선택 |
 
 startup 변경은 그림의 ⑦ 애플리케이션 초기화가 빨라지는 기술이 아닙니다. 준비 완료를 확인하고 ⑧ 요청 처리 가능한 상태로 전환하는 시점이 앞당겨지는지 보는 실험입니다. AOT는 ⑦의 일부 작업을 빌드 시점에 미리 처리합니다. DB 연결·Flyway·실제 객체 생성은 런타임에도 수행합니다.
 
@@ -16,11 +19,13 @@ startup 변경은 그림의 ⑦ 애플리케이션 초기화가 빨라지는 기
 
 ## 바꾸는 설정과 유지하는 조건
 
-- startup 경로는 두 모드 모두 `/actuator/health:8080`, 초기 지연 0초, 검사 timeout 3초입니다.
+- startup 경로는 모든 모드에서 `/actuator/health:8080`, 초기 지연 0초, 검사 timeout 3초입니다.
 - `baseline`: `periodSeconds=5`, `failureThreshold=24`.
 - `short`: `periodSeconds=4`, `failureThreshold=30`. 두 설정의 명목 시작 허용 시간은 `period × failureThreshold = 120초`입니다. 4초는 timeout 3초보다 길게 두면서 검사 간격만 줄인 첫 후보입니다.
+- `quick`: `periodSeconds=3`, `failureThreshold=40`. 기존 두 정책을 보존하며 동일한 명목 기동 허용 시간 120초를 유지합니다. 간격만 3초로 바꾸고 24회를 유지하면 허용 시간이 72초로 줄어 다른 실험이 됩니다.
 - readiness·liveness, CPU·메모리, 최소 인스턴스, 네트워크, 인증·공개 경로, DB 설정은 실험 전환 스크립트에서 변경하지 않습니다. health에서 DB·Redis 검사를 끄지도 않습니다.
-- 모든 비교에서 `PLIMAP_APP_CDS_ENABLED=false`, `PLIMAP_STARTUP_MONITORING_ENABLED=true`를 유지합니다. AppCDS와 startup 변경을 함께 켜거나, AOT와 AppCDS 또는 startup 변경을 함께 적용하는 조합은 차단합니다.
+- 모든 비교에서 `PLIMAP_STARTUP_MONITORING_ENABLED=true`를 유지합니다. 초기 단독 비교 모드는 AppCDS OFF를 보존하고, 후속 조합 모드에서만 AppCDS·AOT를 함께 켭니다. 기본값은 기존과 동일하며 조합은 명시적으로 선택합니다.
+- 배포 입력도 위 표의 명명된 조합과 기존 AppCDS 단독 기본값(ON·AOT OFF·5초)만 허용합니다. 기존 AppCDS 단독 상태는 `baseline`으로 원복할 수 있습니다. 실험 도구가 식별·원복할 수 없는 임의의 조합은 배포 전에 거부합니다.
 
 이전 AppCDS 비교 이미지에는 이번 AOT 생성물과 코드 변경이 없습니다. **이전 결과를 이번 이미지의 대조군으로 재사용하지 않고 새 baseline을 측정**합니다.
 
@@ -112,4 +117,18 @@ AOT 기능 검증은 internal Docker 네트워크·가짜 자격 증명·일회�
 
 AuthController의 기존 `@Valid` 선언과 Docs 인터페이스 선언을 맞춰 AOT의 validation 메타데이터 생성 오류를 수정했습니다. API 입력 조건을 새로 추가하는 변경은 아닙니다. 이 부분은 별도 회귀 테스트로 확인합니다.
 
-공식 근거: [Spring Boot Gradle AOT](https://docs.spring.io/spring-boot/gradle-plugin/aot.html), [JVM AOT 실행과 제약](https://docs.spring.io/spring-boot/reference/packaging/aot.html), [Cloud Run 서비스 설정 변경](https://docs.cloud.google.com/sdk/gcloud/reference/run/services/update).
+## 3초 검사와 최종 조합 후속 비교
+
+1. 기존 동일 이미지에서 `aot` 3쌍과 `aot-quick` 3쌍을 비교합니다. 현재 이미지의 AOT ON·5초 결과를 재사용한다면 이미지·JDK·브라우저·다른 실행 조건의 동일성을 재확인하고 시간대 차이를 기록합니다.
+2. 조합 지원 릴리스는 사용자가 main에 배포합니다. 새 이미지에서는 먼저 `baseline` 3쌍을 새로 수집한 다음 `combined` 3쌍을 수집합니다. 앞선 이미지의 baseline으로 최종 조합 효과를 계산하지 않습니다.
+3. 각 처리 모드 사이에는 `baseline`으로 원복합니다. `set-startup-experiment.ps1`의 `-Mode aot-quick|combined|combined-baseline`을 사용하고, 기대하는 단일 100% revision과 immutable digest를 `-ExpectedRevision`, `-ExpectedImage`로 전달합니다. 같은 이미지·다른 자원·네트워크·readiness 조건의 유지와 트래픽·실패 시 복구를 확인합니다.
+4. 모든 표본은 자연 scale-to-zero 이후 신규 API 기동과 그 인스턴스의 warm을 연결합니다. 배포·검증 요청의 기동은 제외합니다. partial 결과에는 1/3·2/3을 표시하고, 3쌍이 검증된 뒤 중앙값·범위·개선율을 정리합니다.
+5. 최종 측정 후 `baseline`으로 원복하고 실제 AppCDS OFF·AOT OFF·5초/24회·시작 계측 ON과 예상 비로그인 응답을 확인합니다. 수집기·브라우저가 종료됐는지도 확인합니다.
+
+조합은 현재와 같은 JAR·JRE에서 학습한 하나의 `/app/application.jsa`를 공유합니다. 학습 범위 자체를 바꾸는 변수를 추가하지 않습니다. AOT 생성 initializer가 archive에 들어 있다고 가정하지 않고, 실제 AOT 초기화 사용과 애플리케이션 클래스의 `shared objects file (top)` 로드를 각각 검증합니다. 기능 검증이 실패하면 조합 측정으로 넘어가지 않습니다.
+
+AppCDS 단독은 기존 `-Xshare:auto`를 유지합니다. AOT+AppCDS 조합은 `-Xshare:on`으로 실행하여 사용할 수 없는 archive를 조용히 무시하지 않습니다. 누락·손상 archive는 시작 실패로 검증합니다. `test-spring-aot.ps1`은 동일 이미지의 AOT OFF·AOT ON·AOT+AppCDS를 격리한 prod TLS PostGIS/Redis에서 검증합니다. 이 로컬 READY 값은 Cloud Run 성능 표본이 아닙니다.
+
+간격 5초→3초의 검사 빈도는 동일 기동 시간당 약 1.67배입니다. DB·Redis health 확인에 추가 부담이 있을 수 있으므로 요청 실패·기동 실패·warm·CPU·메모리를 함께 기록합니다. READY→startup 성공 로그 간격을 순수 검사 비용으로 해석하거나 각 기법의 단축률을 합산하지 않습니다. 효과가 없거나 조합이 더 느려도 표본을 보존하고 예정 비교 후 논문 작성으로 넘어갑니다.
+
+공식 근거: [Spring Boot Gradle AOT](https://docs.spring.io/spring-boot/gradle-plugin/aot.html), [JVM AOT 실행과 제약](https://docs.spring.io/spring-boot/reference/packaging/aot.html), [Java 21 CDS와 추출 실행](https://docs.spring.io/spring-boot/reference/packaging/aot-cache.html#packaging.aot-cache.cds), [Cloud Run 서비스 설정 변경](https://docs.cloud.google.com/sdk/gcloud/reference/run/services/update).

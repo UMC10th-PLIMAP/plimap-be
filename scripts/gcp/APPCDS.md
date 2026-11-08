@@ -4,7 +4,7 @@
 
 서버가 처음 시작할 때 읽는 애플리케이션·라이브러리 클래스 정보 일부를 미리 정리한 archive로 재사용합니다. 첫 API 응답과 첫 화면 대기를 줄일 수 있는지 검증하기 위한 첫 개선 후보입니다. 설정 추가만으로 개선 효과가 입증되는 것은 아닙니다.
 
-첫 AppCDS 변경은 이미지 생성, 실제 archive 사용 검증과 동일 조건 비교를 준비했습니다. 후속 startup 검사·Spring AOT 실험은 [별도 순차 실험 절차](STARTUP_EXPERIMENTS.md)를 따릅니다. 현재 공통 이미지는 prod AOT 생성물도 포함하지만 기본 AOT OFF이며, AppCDS와 AOT를 동시에 켜지 않습니다. Java 21을 유지하며 Native Image·lazy initialization은 적용하지 않습니다.
+첫 AppCDS 변경은 이미지 생성, 실제 archive 사용 검증과 동일 조건 비교를 준비했습니다. 후속 startup 검사·Spring AOT·최종 조합 실험은 [순차 실험 절차](STARTUP_EXPERIMENTS.md)를 따릅니다. 공통 이미지는 prod AOT 생성물도 포함하지만 기본 AOT OFF입니다. 명시적으로 선택한 AOT+AppCDS 조합에서는 같은 archive의 실제 사용을 검증하고 `-Xshare:on`으로 fallback을 막습니다. Java 21을 유지하며 Native Image·lazy initialization은 적용하지 않습니다.
 
 ## 이미지 구성과 학습 격리
 
@@ -52,7 +52,7 @@ docker build --platform=linux/amd64 --tag plimap-appcds:local .
 | 기타 값 | 시작 전에 exit 64 |
 | ON인데 archive가 없음 | 시작 전에 실패 |
 
-모드와 무관하게 `-Xlog:cds=info`를 기록합니다. ON은 `-Xshare:auto`를 사용하므로 JDK·classpath·JVM 옵션 등이 맞지 않으면 앱이 일반 로딩으로 시작할 수 있습니다. 따라서 `APP_CDS_CONFIGURATION enabled=true`만으로 성공이라고 세지 않습니다. 해당 인스턴스의 JVM 로그에서 `/app/application.jsa`의 open과 dynamic archive mapping 성공, 실패·mismatch·disabled 메시지 여부를 확인해야 합니다. 상세한 애플리케이션 클래스 source 검증은 위의 로컬/CI 진단으로 수행합니다.
+모드와 무관하게 `-Xlog:cds=info`를 기록합니다. AppCDS 단독 ON은 기존 `-Xshare:auto`를 사용하므로 JDK·classpath·JVM 옵션 등이 맞지 않으면 앱이 일반 로딩으로 시작할 수 있습니다. AOT와 함께 켠 조합은 `-Xshare:on`으로 사용할 수 없는 archive를 시작 실패로 처리합니다. 어느 경우도 `APP_CDS_CONFIGURATION enabled=true`만으로 성공이라고 세지 않습니다. 해당 인스턴스의 JVM 로그에서 `/app/application.jsa`의 open과 dynamic archive mapping 성공, 실패·mismatch·disabled 메시지 여부를 확인해야 합니다. 상세한 애플리케이션 클래스 source 검증은 위의 로컬/CI 진단으로 수행합니다.
 
 `-Xshare:on` 강제 검증은 빌드 단계에만 사용합니다. 운영은 archive 불일치로 JVM을 무조건 종료시키지 않지만, fallback 표본은 정상 AppCDS 효과 표본에서 분리합니다. 대체 설정을 조용히 성공으로 처리하지 않습니다.
 

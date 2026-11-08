@@ -34,16 +34,17 @@ try {
     $summary.imageId = Invoke-AotDocker @('image', 'inspect', $Image, '--format', '{{.Id}}')
     Invoke-AotDocker @('run', '--rm', '--network=none', '--entrypoint=sh', $Image, '-c',
         'test "$(cat /app/spring-aot-profile)" = prod && test ! -e /workspace && test ! -e /tmp/appcds-training.properties && test ! -e /tmp/appcds-training-credentials.json && test "$(id -u)" = 10001') | Out-Null
-    foreach ($case in @('invalid-aot', 'combined-modes', 'missing-artifact')) {
+    foreach ($case in @('invalid-aot', 'missing-artifact', 'missing-combined-archive', 'corrupt-combined-archive')) {
         $arguments = switch ($case) {
             'invalid-aot' { @('run', '--rm', '--network=none', '-e', 'PLIMAP_SPRING_AOT_ENABLED=invalid', $Image) }
-            'combined-modes' { @('run', '--rm', '--network=none', '-e', 'PLIMAP_SPRING_AOT_ENABLED=true', '-e', 'PLIMAP_APP_CDS_ENABLED=true', $Image) }
             'missing-artifact' { @('run', '--rm', '--network=none', '-e', 'PLIMAP_SPRING_AOT_ENABLED=true', '-e', 'PLIMAP_APP_CDS_ENABLED=false', '--entrypoint=sh', $Image, '-c', 'rm /app/spring-aot-profile && exec /app/entrypoint.sh') }
+            'missing-combined-archive' { @('run', '--rm', '--network=none', '-e', 'PLIMAP_SPRING_AOT_ENABLED=true', '-e', 'PLIMAP_APP_CDS_ENABLED=true', '--entrypoint=sh', $Image, '-c', 'rm /app/application.jsa && exec /app/entrypoint.sh') }
+            'corrupt-combined-archive' { @('run', '--rm', '--network=none', '-e', 'PLIMAP_SPRING_AOT_ENABLED=true', '-e', 'PLIMAP_APP_CDS_ENABLED=true', '--entrypoint=sh', $Image, '-c', 'chmod u+w /app/application.jsa && printf broken > /app/application.jsa && exec /app/entrypoint.sh') }
         }
         $failure = @(& docker @arguments 2>&1) -join "`n"
-        $expected = if ($case -eq 'missing-artifact') { 1 } else { 64 }
-        if ($LASTEXITCODE -ne $expected) { throw "Invalid AOT case did not reject: $case" }
-        $pattern = switch ($case) { 'invalid-aot' { 'must be true or false' }; 'combined-modes' { 'require PLIMAP_APP_CDS_ENABLED=false' }; 'missing-artifact' { 'missing_prod_artifact' } }
+        $expected = if ($case -eq 'invalid-aot') { 64 } else { 1 }
+        if ($LASTEXITCODE -ne $expected) { throw "Invalid AOT case did not reject: $case (exit=$LASTEXITCODE, expected=$expected): $failure" }
+        $pattern = switch ($case) { 'invalid-aot' { 'must be true or false' }; 'missing-artifact' { 'missing_prod_artifact' }; 'missing-combined-archive' { 'missing_archive' }; 'corrupt-combined-archive' { 'Unable to use shared archive|An error has occurred while processing the shared archive file' } }
         if ($failure -notmatch $pattern) { throw "Invalid AOT case did not report its cause: $case" }
     }
 
@@ -91,13 +92,21 @@ try {
     ) -join "`n"
     [IO.File]::WriteAllText($properties, $dummy + "`n" + $runtime, [Text.UTF8Encoding]::new($false))
     $credentials = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../appcds/training-credentials.json')).Path
-    foreach ($mode in @('false', 'true')) {
+    $modes = @(
+        @{ name = 'false'; aot = 'false'; cds = 'false' },
+        @{ name = 'true'; aot = 'true'; cds = 'false' },
+        @{ name = 'combined'; aot = 'true'; cds = 'true' }
+    )
+    foreach ($configuration in $modes) {
+        $mode = $configuration.name
+        $aot = $configuration.aot
+        $cds = $configuration.cds
         $name = "$taskId-$mode"
         Invoke-AotDocker @('run', '-d', '--name', $name, '--network', $taskId, '--memory=1g', '--cpus=1',
             '--mount', "type=bind,source=$properties,target=/tmp/aot-prod.properties,readonly",
             '--mount', "type=bind,source=$tls/truststore.p12,target=/tmp/aot-truststore.p12,readonly",
             '--mount', "type=bind,source=$credentials,target=/tmp/aot-credentials.json,readonly",
-            '-e', 'SPRING_PROFILES_ACTIVE=prod', '-e', 'PLIMAP_APP_CDS_ENABLED=false', '-e', "PLIMAP_SPRING_AOT_ENABLED=$mode",
+            '-e', 'SPRING_PROFILES_ACTIVE=prod', '-e', "PLIMAP_APP_CDS_ENABLED=$cds", '-e', "PLIMAP_SPRING_AOT_ENABLED=$aot",
             '-e', 'GOOGLE_APPLICATION_CREDENTIALS=/tmp/aot-credentials.json', '-e', 'GOOGLE_CLOUD_PROJECT=plimap-aot-validation',
             '-e', 'JAVA_TOOL_OPTIONS=-Djavax.net.ssl.trustStore=/tmp/aot-truststore.p12 -Djavax.net.ssl.trustStorePassword=aot-test-only -Xlog:class+load=info:file=/tmp/aot-class-load.log',
             $Image, '--spring.config.additional-location=file:/tmp/aot-prod.properties') | Out-Null
@@ -120,13 +129,18 @@ try {
         Assert-AotStatus $name '/oauth/authorization/google?frontendOrigin=http://localhost:8080' 302
         Invoke-AotDocker @('cp', "${name}:/tmp/aot-class-load.log", (Join-Path $output "$mode-class-load.log")) | Out-Null
         $classes = Get-Content -LiteralPath (Join-Path $output "$mode-class-load.log") -Raw
-        if ($log -notmatch "event=SPRING_AOT_RUNTIME enabled=$mode" -or $log -notmatch 'event=APP_CDS_CONFIGURATION enabled=false') { throw 'Actual runtime mode evidence missing.' }
-        if ($mode -eq 'true' -and ($classes -notmatch 'com.example.plimap.PlimapApplication__ApplicationContextInitializer source:' -or $log -notmatch 'Starting AOT-processed PlimapApplication')) { throw 'Generated AOT initializer was not used.' }
-        if ($mode -eq 'false' -and $log -match 'Starting AOT-processed PlimapApplication') { throw 'AOT leaked into the OFF control.' }
+        if ($log -notmatch "event=SPRING_AOT_RUNTIME enabled=$aot" -or $log -notmatch "event=APP_CDS_CONFIGURATION enabled=$cds") { throw 'Actual runtime mode evidence missing.' }
+        if ($aot -eq 'true' -and ($classes -notmatch 'com.example.plimap.PlimapApplication__ApplicationContextInitializer source:' -or $log -notmatch 'Starting AOT-processed PlimapApplication')) { throw 'Generated AOT initializer was not used.' }
+        if ($aot -eq 'false' -and $log -match 'Starting AOT-processed PlimapApplication') { throw 'AOT leaked into the OFF control.' }
+        $sharedClasses = [regex]::Matches($classes, 'com\.example\.plimap\.[^\r\n]*source: shared objects file \(top\)').Count
+        if ($cds -eq 'true' -and ($sharedClasses -eq 0 -or $classes -notmatch 'com\.example\.plimap\.PlimapApplication source: shared objects file \(top\)' -or
+            $log -notmatch 'Opened archive /app/application\.jsa' -or $log -notmatch 'Mapped dynamic region')) { throw 'Combined mode did not actually use the application archive.' }
+        if ($cds -eq 'false' -and $sharedClasses -ne 0) { throw 'Application archive leaked into the OFF control.' }
+        if ($log -match 'Unable to use shared archive|Failed to open shared archive|shared class paths mismatch') { throw 'Archive could not be used.' }
         if ($log -notmatch 'event=APPLICATION_READY elapsed_ms=(\d+)') { throw 'READY monitoring evidence missing.' }
-        $summary.modes += @{ enabled = $mode; readyMs = [long]$Matches[1]; prodProfile = $true; postgresTls = $true; redisTls = $true; health = 200; profile = 401; csrf = 200; map = 200; invalidLogin = 400; oauthRedirect = 302 }
+        $summary.modes += @{ name = $mode; enabled = $aot; appCdsEnabled = $cds; sharedApplicationClasses = $sharedClasses; readyMs = [long]$Matches[1]; prodProfile = $true; postgresTls = $true; redisTls = $true; health = 200; profile = 401; csrf = 200; map = 200; invalidLogin = 400; oauthRedirect = 302 }
         Invoke-AotDocker @('stop', '--time=20', $name) | Out-Null
-        Write-Output "Passed isolated prod Spring AOT enabled=$mode"
+        Write-Output "Passed isolated prod Spring AOT enabled=$aot AppCDS=$cds sharedClasses=$sharedClasses"
     }
     $summary.status = 'passed'
 } finally {

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('baseline', 'startup', 'aot')][string]$Mode,
+    [Parameter(Mandatory)][ValidateSet('baseline', 'startup', 'aot', 'aot-quick', 'combined', 'combined-baseline')][string]$Mode,
     [Parameter(Mandatory)][string]$ExpectedImage,
     [Parameter(Mandatory)][ValidatePattern('^[a-z][a-z0-9-]{0,62}$')][string]$ExpectedRevision,
     [ValidatePattern('^[a-z][a-z0-9-]{4,28}[a-z0-9]$')][string]$ProjectId = 'plimap',
@@ -48,14 +48,17 @@ function Test-ExperimentProbe {
 
 function Get-ExperimentMode {
     param($Service)
-    if ((Get-ExperimentFlag $Service 'PLIMAP_APP_CDS_ENABLED') -ne 'false' -or
-        (Get-ExperimentFlag $Service 'PLIMAP_STARTUP_MONITORING_ENABLED') -ne 'true') { throw 'Experiments require AppCDS OFF and startup monitoring ON.' }
+    if ((Get-ExperimentFlag $Service 'PLIMAP_STARTUP_MONITORING_ENABLED') -ne 'true') { throw 'Experiments require startup monitoring ON.' }
+    $cds = Get-ExperimentFlag $Service 'PLIMAP_APP_CDS_ENABLED'
     $aot = Get-ExperimentFlag $Service 'PLIMAP_SPRING_AOT_ENABLED'
     $probe = $Service.spec.template.spec.containers[0].startupProbe
-    if ($aot -eq 'false' -and (Test-ExperimentProbe $probe 'baseline')) { return 'baseline' }
-    if ($aot -eq 'false' -and (Test-ExperimentProbe $probe 'short')) { return 'startup' }
-    if ($aot -eq 'true' -and (Test-ExperimentProbe $probe 'baseline')) { return 'aot' }
-    throw 'Current configuration is not a recognized isolated experiment mode.'
+    if ($cds -eq 'true' -and $aot -eq 'false' -and (Test-ExperimentProbe $probe 'baseline')) { return 'appcds' }
+    foreach ($name in @('baseline', 'startup', 'aot', 'aot-quick', 'combined', 'combined-baseline')) {
+        $expected = Get-StartupExperimentSettings $name
+        if ($cds -eq $expected.appCdsEnabled -and $aot -eq $expected.springAotEnabled -and
+            (Test-ExperimentProbe $probe $expected.startupProbePolicy)) { return $name }
+    }
+    throw 'Current configuration is not a recognized experiment mode.'
 }
 
 function Get-OtherRuntimeSpec {
@@ -63,7 +66,7 @@ function Get-OtherRuntimeSpec {
     # Compare in memory. Never write arbitrary runtime environment values or credentials.
     $spec = $Service.spec.template.spec | ConvertTo-Json -Depth 30 | ConvertFrom-Json
     $spec.containers[0].PSObject.Properties.Remove('startupProbe')
-    $spec.containers[0].env = @($spec.containers[0].env | Where-Object name -ne 'PLIMAP_SPRING_AOT_ENABLED' | Sort-Object name)
+    $spec.containers[0].env = @($spec.containers[0].env | Where-Object name -notin @('PLIMAP_SPRING_AOT_ENABLED', 'PLIMAP_APP_CDS_ENABLED') | Sort-Object name)
     return ($spec | ConvertTo-Json -Depth 30 -Compress)
 }
 
@@ -90,6 +93,7 @@ try {
     $currentMode = Get-ExperimentMode $before
     $result.previousMode = $currentMode
     if ($currentMode -ne 'baseline' -and $Mode -ne 'baseline' -and $currentMode -ne $Mode) { throw 'Restore baseline before switching between startup and AOT experiments.' }
+    $result.appCdsEnabled = $settings.appCdsEnabled
     $result.springAotEnabled = $settings.springAotEnabled
     $result.startupProbePolicy = $settings.startupProbePolicy
     $result.startupProbe = Get-StartupProbePolicy -Policy $settings.startupProbePolicy
@@ -101,7 +105,7 @@ try {
         $candidate = "$ServiceName-$suffix"
         $result.candidateRevision = $candidate
         Invoke-ExperimentGcloud @('run', 'services', 'update', $ServiceName, "--project=$ProjectId", "--region=$Region",
-            "--revision-suffix=$suffix", '--no-traffic', "--update-env-vars=PLIMAP_SPRING_AOT_ENABLED=$($settings.springAotEnabled)",
+            "--revision-suffix=$suffix", '--no-traffic', "--update-env-vars=PLIMAP_SPRING_AOT_ENABLED=$($settings.springAotEnabled),PLIMAP_APP_CDS_ENABLED=$($settings.appCdsEnabled)",
             "--startup-probe=$(Get-StartupProbeArgument -Policy $settings.startupProbePolicy)", '--quiet', '--format=none') | Out-Null
         $pending = Get-ExperimentService
         Assert-ExperimentTraffic $pending $ExpectedRevision

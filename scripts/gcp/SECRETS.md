@@ -111,8 +111,8 @@ Kakao와 Google에는 dev 전용 OAuth client를 사용합니다. 각 Provider C
 | `PROD_PUBLIC_SMOKE_ENABLED` | `PublicSmokeEnabled` | 운영값 `true`; 재해 복구 중 DNS 미연결 시에만 일시 `false` |
 | `PROD_APP_CDS_ENABLED` | `AppCdsEnabled` | 기본 `true`; 분리 cold-start 실험은 `false` |
 | `PROD_STARTUP_MONITORING_ENABLED` | `StartupMonitoringEnabled` | 워크플로 기본 `true`; 수동 스크립트 기본 `false` |
-| `PROD_SPRING_AOT_ENABLED` | `SpringAotEnabled` | 기본 `false`; ON 실험은 AppCDS OFF·baseline startup과만 조합 |
-| `PROD_STARTUP_PROBE_POLICY` | `StartupProbePolicy` | 기본 `baseline` (5초); startup 실험은 `short` (4초). [전환·원복](STARTUP_EXPERIMENTS.md) |
+| `PROD_SPRING_AOT_ENABLED` | `SpringAotEnabled` | 기본 `false`; 단독 비교 및 실제 archive 사용을 검증한 AppCDS 조합 지원 |
+| `PROD_STARTUP_PROBE_POLICY` | `StartupProbePolicy` | 기본 `baseline` (5초/24회); `short` (4초/30회), `quick` (3초/40회). [전환·원복](STARTUP_EXPERIMENTS.md) |
 
 `deploy-prod.ps1`은 다음 공개 애플리케이션 환경변수를 생성합니다.
 
