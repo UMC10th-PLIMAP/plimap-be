@@ -36,7 +36,7 @@ param(
     [string]$StartupMonitoringEnabled = "false",
     [ValidateSet("true", "false")]
     [string]$SpringAotEnabled = "false",
-    [ValidateSet("baseline", "short")]
+    [ValidateSet("baseline", "short", "quick")]
     [string]$StartupProbePolicy = "baseline",
     [string]$ResultPath = ""
 )

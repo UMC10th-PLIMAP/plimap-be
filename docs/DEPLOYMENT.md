@@ -44,7 +44,7 @@ Dev는 `dev.plimap.kr`, Prod는 `plimap.kr`에서 운영 중입니다.
 - Java 21과 Spring Boot 애플리케이션을 하나의 컨테이너 이미지로 빌드합니다.
 - Docker 이미지는 JDK builder와 JRE runtime을 분리한 multi-stage build를 사용합니다.
 - 기본 이미지는 Java 21 AppCDS archive를 포함한 추출 실행 구조입니다. 학습·실행은 동일한 고정 JRE 이미지를 사용하고, `PLIMAP_APP_CDS_ENABLED=false`로 같은 이미지의 애플리케이션 archive만 끌 수 있습니다.
-- 같은 이미지에 prod 전용 Spring AOT 생성물을 포함하며 기본 실행은 AOT OFF입니다. `PROD_SPRING_AOT_ENABLED=false`, `PROD_STARTUP_PROBE_POLICY=baseline`이 기본값이고, 분리 비교를 위해 AOT ON은 AppCDS OFF·기존 startup 정책과만 조합합니다.
+- 같은 이미지에 prod 전용 Spring AOT 생성물을 포함하며 기본 실행은 AOT OFF입니다. `PROD_SPRING_AOT_ENABLED=false`, `PROD_STARTUP_PROBE_POLICY=baseline` 기본값을 보존합니다. 후속 실험은 `quick` 3초/40회 및 AOT+AppCDS 조합을 명시적으로 선택할 수 있습니다. 조합은 실제 AOT 초기화·archive 사용을 검증하며 사용할 수 없는 archive는 시작 실패로 처리합니다. [비교·원복 절차](../scripts/gcp/STARTUP_EXPERIMENTS.md)를 따릅니다.
 - Prod 배포 워크플로는 시작 계측을 기본 활성화합니다. `PROD_APP_CDS_ENABLED`와 `PROD_STARTUP_MONITORING_ENABLED` GitHub Variables로 각각 `true`/`false`를 선택하고, 배포 결과에 선택값을 기록합니다. 수동 스크립트의 시작 계측 기본값은 기존처럼 `false`입니다.
 - 컨테이너는 non-root 사용자로 실행하며 기본 포트는 `8080`입니다.
 - Hibernate는 스키마를 자동 생성하지 않고 검증만 수행합니다.

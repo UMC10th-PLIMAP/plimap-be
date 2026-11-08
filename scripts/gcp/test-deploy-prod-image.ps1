@@ -127,7 +127,7 @@ $deployPath = Join-Path $PSScriptRoot "deploy-prod.ps1"
 $testDirectory = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
 [IO.Directory]::CreateDirectory($testDirectory) | Out-Null
 try {
-    foreach ($scenario in @("success-index", "success-runtime", "success-single", "success-appcds-off", "success-instrumented", "success-uppercase", "success-aot", "success-startup", "wrong-input", "wrong-repository", "registry-failure", "image-mismatch", "not-ready", "traffic-not-converged", "promotion-command-failure", "post-promotion-failure")) {
+    foreach ($scenario in @("success-index", "success-runtime", "success-single", "success-appcds-off", "success-instrumented", "success-uppercase", "success-aot", "success-startup", "success-aot-quick", "success-combined", "wrong-input", "wrong-repository", "registry-failure", "image-mismatch", "not-ready", "traffic-not-converged", "promotion-command-failure", "post-promotion-failure")) {
         $global:PlimapDeploymentFixture = @{
             scenario = $scenario
             indexDigest = $indexDigest
@@ -154,9 +154,9 @@ try {
             default { $indexImage }
         }
         $resultPath = Join-Path $testDirectory "$scenario.json"
-        $appCdsEnabled = if ($scenario -in @("success-appcds-off", "success-aot", "success-startup")) { "false" } else { "true" }
-        $springAotEnabled = if ($scenario -eq 'success-aot') { 'true' } else { 'false' }
-        $probePolicy = if ($scenario -eq 'success-startup') { 'short' } else { 'baseline' }
+        $appCdsEnabled = if ($scenario -in @("success-appcds-off", "success-aot", "success-startup", "success-aot-quick")) { "false" } else { "true" }
+        $springAotEnabled = if ($scenario -in @('success-aot', 'success-aot-quick', 'success-combined')) { 'true' } else { 'false' }
+        $probePolicy = if ($scenario -eq 'success-startup') { 'short' } elseif ($scenario -in @('success-aot-quick', 'success-combined')) { 'quick' } else { 'baseline' }
         $startupMonitoringEnabled = if ($scenario -in @("success-instrumented", "success-uppercase")) { "true" } else { "false" }
         $appCdsInput = if ($scenario -eq "success-uppercase") { "TRUE" } else { $appCdsEnabled }
         $startupMonitoringInput = if ($scenario -eq "success-uppercase") { "TRUE" } else { $startupMonitoringEnabled }
