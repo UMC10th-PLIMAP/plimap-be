@@ -13,9 +13,9 @@
 - `deploy-prod.ps1`: Prod revision을 공개 traffic tag 없이 0%로 기동하고 Ready·image digest를 검증한 뒤 트래픽을 전환하며, LB 전용 상태 또는 선택적 공개 smoke 검증 실패 시 직전 revision을 복구합니다.
 - `container-image.ps1`: 승인된 원본 manifest에서 유일한 `linux/amd64` 실행 digest를 확정하는 공통 함수를 제공합니다.
 - `test-deploy-prod-image.ps1`: 외부 호출 없이 manifest 선택과 실제 배포 스크립트의 Ready·트래픽 전환·rollback 경로를 검증합니다.
-- `STARTUP_EXPERIMENTS.md`: 같은 이미지에서 baseline → startup → 원복 → AOT → 원복을 수행하는 후속 실험 절차입니다.
-- `set-startup-experiment.ps1`: 기대한 revision·digest에서 AOT와 startup 검사 설정만 변경하고 다른 runtime 설정 유지·트래픽·복구를 확인합니다.
-- `startup-experiment.ps1`, `test-startup-experiment.ps1`: 분리 실험 정책과 외부 호출 없는 전환·실패·복구 검증입니다.
+- `STARTUP_EXPERIMENTS.md`: 같은 이미지의 단독 비교, AOT+3초 및 새 이미지의 baseline·최종 조합 비교와 원복 절차입니다.
+- `set-startup-experiment.ps1`: 기대한 revision·digest에서 AppCDS·AOT·startup 검사 설정만 변경하고 다른 runtime 설정 유지·트래픽·복구를 확인합니다. `aot-quick`, `combined`, `combined-baseline` 후속 모드를 명시적으로 선택합니다.
+- `startup-experiment.ps1`, `test-startup-experiment.ps1`: 5초/24회·4초/30회·3초/40회 정책과 외부 호출 없는 전환·실패·복구 검증입니다.
 - `deploy-prod.ps1`의 `-SpringAotEnabled` 기본값은 `false`, `-StartupProbePolicy` 기본값은 `baseline`입니다. Prod 워크플로에서는 `PROD_SPRING_AOT_ENABLED`, `PROD_STARTUP_PROBE_POLICY`로 지정합니다.
 - `deploy-prod.ps1`의 `-AppCdsEnabled true|false`, `-StartupMonitoringEnabled true|false`는 env-vars-file에 명시되어 배포 시 설정이 유실되지 않습니다. AppCDS 기본값은 `true`, 수동 시작 계측 기본값은 `false`이고 Prod 워크플로에서는 두 값 모두 기본 `true`입니다. [검증·측정 절차](APPCDS.md)를 참고합니다.
 - `configure-prod-5xx-discord-alert.ps1`: Prod 애플리케이션 5xx 로그를 Discord로 전달하는 Logging Sink, Pub/Sub, Cloud Run Function과 Eventarc를 구성합니다. 기본 실행은 plan-only입니다.

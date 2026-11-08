@@ -103,7 +103,7 @@ jobs:
         shell: pwsh
         run: ./scripts/appcds/test-appcds.ps1 -Image plimap-appcds:ci -ResultDirectory ./build/appcds-validation
 
-      - name: Test Spring AOT OFF/ON with isolated Prod TLS services
+      - name: Test AOT OFF/ON and AppCDS combination with isolated Prod TLS services
         shell: pwsh
         run: ./scripts/spring-aot/test-spring-aot.ps1 -Image plimap-appcds:ci -ResultDirectory ./build/spring-aot-validation
 
