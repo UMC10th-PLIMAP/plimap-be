@@ -27,4 +27,12 @@ function Assert-StartupExperimentCombination {
         throw 'AppCDS and Spring AOT flags must be true or false.'
     }
     Get-StartupProbePolicy -Policy $StartupProbePolicy | Out-Null
+    # Preserve the ordinary AppCDS-only deployment default as well as named experiments.
+    if ($AppCdsEnabled -eq 'true' -and $SpringAotEnabled -eq 'false' -and $StartupProbePolicy -eq 'baseline') { return }
+    foreach ($mode in @('baseline', 'startup', 'aot', 'aot-quick', 'combined', 'combined-baseline')) {
+        $settings = Get-StartupExperimentSettings $mode
+        if ($AppCdsEnabled -eq $settings.appCdsEnabled -and $SpringAotEnabled -eq $settings.springAotEnabled -and
+            $StartupProbePolicy -eq $settings.startupProbePolicy) { return }
+    }
+    throw 'Select a supported experiment combination so the configuration can be identified and restored.'
 }

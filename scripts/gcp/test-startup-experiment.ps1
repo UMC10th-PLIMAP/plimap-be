@@ -15,10 +15,14 @@ foreach ($policy in @('baseline', 'short', 'quick')) {
 Assert-ExperimentEqual (Get-StartupProbePolicy baseline).periodSeconds 5 'Preserve original policy'
 Assert-ExperimentEqual (Get-StartupProbePolicy short).periodSeconds 4 'Preserve first interval experiment'
 Assert-ExperimentEqual (Get-StartupProbePolicy quick).periodSeconds 3 'Add three-second interval'
-foreach ($cds in @('true', 'false')) {
-    foreach ($aot in @('true', 'false')) {
-        foreach ($policy in @('baseline', 'short', 'quick')) { Assert-StartupExperimentCombination $cds $aot $policy }
-    }
+foreach ($combination in @('false,false,baseline', 'false,false,short', 'false,true,baseline', 'false,true,quick', 'true,true,quick', 'true,true,baseline', 'true,false,baseline')) {
+    $cds, $aot, $policy = $combination -split ','
+    Assert-StartupExperimentCombination $cds $aot $policy
+}
+foreach ($combination in @('false,false,quick', 'false,true,short', 'true,false,short', 'true,false,quick', 'true,true,short')) {
+    $cds, $aot, $policy = $combination -split ','
+    try { Assert-StartupExperimentCombination $cds $aot $policy; throw 'Missing rejection' }
+    catch { if ($_.Exception.Message -notmatch 'supported experiment combination') { throw } }
 }
 try { Assert-StartupExperimentCombination 'invalid' 'true' 'quick'; throw 'Missing rejection' }
 catch { if ($_.Exception.Message -notmatch 'must be true or false') { throw } }
@@ -91,7 +95,7 @@ function Invoke-WebRequest { throw 'HTTP must not be called by the offline confi
 
 $directory = [IO.Directory]::CreateDirectory((Join-Path $PSScriptRoot "../../build/startup-script-validation-$([guid]::NewGuid().ToString('N'))")).FullName
 $image = 'asia-northeast3-docker.pkg.dev/plimap/plimap-docker/api@sha256:' + ('a' * 64)
-$cases = @('startup', 'aot', 'aot-quick', 'combined', 'combined-baseline', 'restore-startup', 'restore-aot', 'restore-aot-quick', 'restore-combined', 'restore-combined-baseline', 'unchanged', 'unchanged-combined', 'stale-revision', 'changed-image', 'other-setting-change', 'not-ready', 'missing-flag', 'wrong-transition', 'promotion-failure', 'concurrent-change', 'combined-promotion-failure', 'combined-concurrent-change')
+$cases = @('startup', 'aot', 'aot-quick', 'combined', 'combined-baseline', 'restore-startup', 'restore-aot', 'restore-aot-quick', 'restore-combined', 'restore-combined-baseline', 'restore-appcds', 'unchanged', 'unchanged-combined', 'stale-revision', 'changed-image', 'other-setting-change', 'not-ready', 'missing-flag', 'wrong-transition', 'promotion-failure', 'concurrent-change', 'combined-promotion-failure', 'combined-concurrent-change')
 try {
     foreach ($scenario in $cases) {
         $global:PlimapStartupFixture = @{
@@ -105,6 +109,7 @@ try {
         if ($scenario -eq 'restore-aot') { $f.aot = 'true' }
         if ($scenario -in @('restore-aot-quick', 'restore-combined')) { $f.aot = 'true'; $f.policy = 'quick' }
         if ($scenario -in @('restore-combined', 'restore-combined-baseline')) { $f.cds = 'true'; $f.aot = 'true' }
+        if ($scenario -eq 'restore-appcds') { $f.cds = 'true' }
         if ($scenario -eq 'unchanged-combined') { $f.cds = 'true'; $f.aot = 'true'; $f.policy = 'quick' }
         if ($scenario -eq 'wrong-transition') { $mode = 'aot' }
         if ($scenario -eq 'changed-image') { $f.image = $image.Replace('a' * 64, 'b' * 64) }

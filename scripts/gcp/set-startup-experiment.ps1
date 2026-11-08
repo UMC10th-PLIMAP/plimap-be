@@ -52,6 +52,7 @@ function Get-ExperimentMode {
     $cds = Get-ExperimentFlag $Service 'PLIMAP_APP_CDS_ENABLED'
     $aot = Get-ExperimentFlag $Service 'PLIMAP_SPRING_AOT_ENABLED'
     $probe = $Service.spec.template.spec.containers[0].startupProbe
+    if ($cds -eq 'true' -and $aot -eq 'false' -and (Test-ExperimentProbe $probe 'baseline')) { return 'appcds' }
     foreach ($name in @('baseline', 'startup', 'aot', 'aot-quick', 'combined', 'combined-baseline')) {
         $expected = Get-StartupExperimentSettings $name
         if ($cds -eq $expected.appCdsEnabled -and $aot -eq $expected.springAotEnabled -and
