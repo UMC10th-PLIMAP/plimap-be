@@ -27,7 +27,7 @@ startup 변경은 그림의 ⑦ 애플리케이션 초기화가 빨라지는 기
 ## 한 번의 릴리스 준비
 
 1. PR을 `develop`에 병합하고 기존 릴리스 절차로 `main`에 반영합니다. main 배포 승인은 운영자가 수행합니다.
-2. GitHub `prod` Environment Variables를 다음으로 둡니다. 실제 설정값은 배포 전에 확인합니다.
+2. GitHub `production` Environment Variables를 다음으로 둡니다. 실제 설정값은 배포 전에 확인합니다.
 
    | 변수 | 최초 비교 배포 값 |
    | --- | --- |
