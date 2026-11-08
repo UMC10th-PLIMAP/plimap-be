@@ -4,7 +4,7 @@
 
 서버가 처음 시작할 때 읽는 애플리케이션·라이브러리 클래스 정보 일부를 미리 정리한 archive로 재사용합니다. 첫 API 응답과 첫 화면 대기를 줄일 수 있는지 검증하기 위한 첫 개선 후보입니다. 설정 추가만으로 개선 효과가 입증되는 것은 아닙니다.
 
-이번 변경은 이미지 생성, 실제 archive 사용 검증과 동일 조건 비교 준비입니다. Java 21을 유지하며 Spring AOT, Native Image, lazy initialization, 프로브·CPU·메모리·네트워크·공개 API·DB 스키마는 변경하지 않습니다. 운영 배포와 실제 자연 cold/warm 측정은 별도로 진행합니다.
+첫 AppCDS 변경은 이미지 생성, 실제 archive 사용 검증과 동일 조건 비교를 준비했습니다. 후속 startup 검사·Spring AOT 실험은 [별도 순차 실험 절차](STARTUP_EXPERIMENTS.md)를 따릅니다. 현재 공통 이미지는 prod AOT 생성물도 포함하지만 기본 AOT OFF이며, AppCDS와 AOT를 동시에 켜지 않습니다. Java 21을 유지하며 Native Image·lazy initialization은 적용하지 않습니다.
 
 ## 이미지 구성과 학습 격리
 

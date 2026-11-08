@@ -29,6 +29,9 @@ $secretMap = [ordered]@{
     YOUTUBE_API_KEY            = "plimap-dev-youtube-api-key"
     SUPABASE_URL               = "plimap-dev-supabase-url"
     SUPABASE_SECRET_KEY        = "plimap-dev-supabase-secret-key"
+    KAKAO_ADMIN_KEY            = "plimap-dev-kakao-admin-key"
+    APPLE_PRIVATE_KEY          = "plimap-dev-apple-private-key"
+    SOCIAL_TOKEN_ENCRYPTION_KEY = "plimap-dev-social-token-encryption-key"
 }
 
 $privateNetworkOriginPatterns = @(

@@ -128,6 +128,8 @@ jobs:
           PROD_PUBLIC_SMOKE_ENABLED: ${{ vars.PROD_PUBLIC_SMOKE_ENABLED }}
           PROD_APP_CDS_ENABLED: ${{ vars.PROD_APP_CDS_ENABLED || 'true' }}
           PROD_STARTUP_MONITORING_ENABLED: ${{ vars.PROD_STARTUP_MONITORING_ENABLED || 'true' }}
+          PROD_SPRING_AOT_ENABLED: ${{ vars.PROD_SPRING_AOT_ENABLED || 'false' }}
+          PROD_STARTUP_PROBE_POLICY: ${{ vars.PROD_STARTUP_PROBE_POLICY || 'baseline' }}
           DEPLOYMENT_RESULT_PATH: ${{ runner.temp }}/prod-deployment-result.json
         run: |
           $publicBaseUrl = if ($env:PROD_PUBLIC_BASE_URL) {
@@ -155,6 +157,8 @@ jobs:
             -PublicSmokeEnabled:$publicSmokeEnabled `
             -AppCdsEnabled $env:PROD_APP_CDS_ENABLED `
             -StartupMonitoringEnabled $env:PROD_STARTUP_MONITORING_ENABLED `
+            -SpringAotEnabled $env:PROD_SPRING_AOT_ENABLED `
+            -StartupProbePolicy $env:PROD_STARTUP_PROBE_POLICY `
             -ResultPath $env:DEPLOYMENT_RESULT_PATH
 
       - name: Write deployment summary
@@ -189,6 +193,8 @@ jobs:
               "| Approved source image | ``$($result.approvedSourceImage)`` |",
               "| AppCDS requested | $($result.appCdsEnabled) |",
               "| Startup monitoring | $($result.startupMonitoringEnabled) |",
+              "| Spring AOT requested | $($result.springAotEnabled) |",
+              "| Startup probe policy | $($result.startupProbePolicy) |",
               "| Secret versions | $secretVersionSummary |",
               "| Candidate verification | $($result.candidateVerification) |",
               "| Traffic promotion | $($result.trafficPromotion) |",

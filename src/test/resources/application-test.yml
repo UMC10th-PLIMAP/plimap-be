@@ -35,6 +35,9 @@ kakao:
   local:
     rest-api-key: test-kakao-rest-api-key
 
+social-token:
+  encryption-key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+
 youtube:
   api:
     key: test-youtube-api-key

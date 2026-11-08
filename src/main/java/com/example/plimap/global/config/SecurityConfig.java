@@ -7,6 +7,7 @@ import com.example.plimap.domain.member.repository.MemberRepository;
 import com.example.plimap.global.security.AuthCookieUtil;
 import com.example.plimap.global.security.BearerTokenRequestMatcher;
 import com.example.plimap.global.security.CsrfCookieFilter;
+import com.example.plimap.global.security.GoogleOfflineAuthorizationRequestResolver;
 import com.example.plimap.global.security.HttpCookieOAuth2AuthorizationRequestRepository;
 import com.example.plimap.global.security.JwtAuthFilter;
 import com.example.plimap.global.security.JwtUtil;
@@ -26,6 +27,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -74,7 +76,8 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(
             HttpSecurity http,
             HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository,
-            OAuthFrontendRedirectCookieRepository oAuthFrontendRedirectCookieRepository
+            OAuthFrontendRedirectCookieRepository oAuthFrontendRedirectCookieRepository,
+            ClientRegistrationRepository clientRegistrationRepository
     ) throws Exception {
         http
                 .csrf(csrf -> csrf
@@ -120,6 +123,8 @@ public class SecurityConfig {
                 .oauth2Login(oauth -> oauth
                         .authorizationEndpoint(endpoint -> endpoint
                                 .baseUri("/oauth/authorization")
+                                .authorizationRequestResolver(new GoogleOfflineAuthorizationRequestResolver(
+                                        clientRegistrationRepository, "/oauth/authorization"))
                                 .authorizationRequestRepository(authorizationRequestRepository))
                         .redirectionEndpoint(endpoint ->
                                 endpoint.baseUri("/oauth/callback/*"))

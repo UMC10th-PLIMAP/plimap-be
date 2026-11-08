@@ -34,7 +34,7 @@ jobs:
         shell: pwsh
         run: |
           $failed = $false
-          Get-ChildItem ./scripts/gcp/*.ps1 | ForEach-Object {
+          Get-ChildItem ./scripts/gcp/*.ps1, ./scripts/spring-aot/*.ps1 | ForEach-Object {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile(
@@ -65,6 +65,10 @@ jobs:
         shell: pwsh
         run: ./scripts/gcp/test-deploy-prod-image.ps1
 
+      - name: Test isolated startup experiment transitions
+        shell: pwsh
+        run: ./scripts/gcp/test-startup-experiment.ps1
+
       - name: Set up JDK 21
         uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
         with:
@@ -83,21 +87,25 @@ jobs:
         run: ./gradlew build --no-daemon
 
   appcds-image:
-    name: AppCDS image and application archive
+    name: AppCDS and Spring AOT image validation
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
-      - name: Build and verify offline AppCDS training
+      - name: Build offline AOT assets and AppCDS archive
         run: docker build --tag plimap-appcds:ci .
 
       - name: Test ON/OFF archive use and isolated API behavior
         shell: pwsh
         run: ./scripts/appcds/test-appcds.ps1 -Image plimap-appcds:ci -ResultDirectory ./build/appcds-validation
+
+      - name: Test Spring AOT OFF/ON with isolated Prod TLS services
+        shell: pwsh
+        run: ./scripts/spring-aot/test-spring-aot.ps1 -Image plimap-appcds:ci -ResultDirectory ./build/spring-aot-validation
 
       - name: Show local startup diagnostics on failure
         if: failure()
@@ -105,3 +113,5 @@ jobs:
         run: |
           Get-ChildItem ./build/appcds-validation/*-application.log -ErrorAction SilentlyContinue |
             ForEach-Object { Get-Content -LiteralPath $_.FullName -Tail 80 }
+          Get-ChildItem ./build/spring-aot-validation/*-final.log -ErrorAction SilentlyContinue |
+            ForEach-Object { Get-Content -LiteralPath $_.FullName -Tail 20 }

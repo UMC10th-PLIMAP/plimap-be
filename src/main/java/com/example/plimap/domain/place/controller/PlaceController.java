@@ -41,6 +41,7 @@ public class PlaceController implements PlaceControllerDocs {
             @RequestParam(required = false) Double longitude
     ) {
         PlaceResponse.PopularListResult result = placeQueryService.getPopularPlaces(
+                currentMember.getMember().getId(),
                 PopularPlaceScope.valueOf(scope),
                 latitude,
                 longitude

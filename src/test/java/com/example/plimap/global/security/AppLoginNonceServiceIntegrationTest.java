@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.plimap.support.PostgisContainerConfiguration;
 import com.example.plimap.support.RedisContainerConfiguration;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -19,14 +22,29 @@ class AppLoginNonceServiceIntegrationTest {
     private AppLoginNonceService appLoginNonceService;
 
     @Test
-    void 발급한_nonce는_한_번만_소비할_수_있다() {
-        String nonce = appLoginNonceService.issue();
+    void 발급한_nonce의_해시값은_한_번만_소비할_수_있다() throws Exception {
+        // given - 앱의 애플 로그인 라이브러리가 하듯 SHA-256(소문자 hex)으로 해시한 값이 ID 토큰에 담겨 온다
+        String hashedNonce = sha256Hex(appLoginNonceService.issue());
 
-        boolean firstConsume = appLoginNonceService.consume(nonce);
-        boolean secondConsume = appLoginNonceService.consume(nonce);
+        // when
+        boolean firstConsume = appLoginNonceService.consume(hashedNonce);
+        boolean secondConsume = appLoginNonceService.consume(hashedNonce);
 
+        // then
         assertThat(firstConsume).isTrue();
         assertThat(secondConsume).isFalse();
+    }
+
+    @Test
+    void 해시하지_않은_원래_nonce로는_소비할_수_없다() {
+        // given
+        String nonce = appLoginNonceService.issue();
+
+        // when
+        boolean consumed = appLoginNonceService.consume(nonce);
+
+        // then
+        assertThat(consumed).isFalse();
     }
 
     @Test
@@ -41,5 +59,10 @@ class AppLoginNonceServiceIntegrationTest {
         assertThat(appLoginNonceService.consume(null)).isFalse();
         assertThat(appLoginNonceService.consume("")).isFalse();
         assertThat(appLoginNonceService.consume("  ")).isFalse();
+    }
+
+    private static String sha256Hex(String value) throws Exception {
+        byte[] hash = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+        return HexFormat.of().formatHex(hash);
     }
 }

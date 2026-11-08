@@ -1,5 +1,6 @@
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "container-image.ps1")
+. (Join-Path $PSScriptRoot "startup-experiment.ps1")
 
 function Assert-Equal {
     param($Actual, $Expected, [string]$Message)
@@ -126,7 +127,7 @@ $deployPath = Join-Path $PSScriptRoot "deploy-prod.ps1"
 $testDirectory = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString())
 [IO.Directory]::CreateDirectory($testDirectory) | Out-Null
 try {
-    foreach ($scenario in @("success-index", "success-runtime", "success-single", "success-appcds-off", "success-instrumented", "success-uppercase", "wrong-input", "wrong-repository", "registry-failure", "image-mismatch", "not-ready", "traffic-not-converged", "promotion-command-failure", "post-promotion-failure")) {
+    foreach ($scenario in @("success-index", "success-runtime", "success-single", "success-appcds-off", "success-instrumented", "success-uppercase", "success-aot", "success-startup", "wrong-input", "wrong-repository", "registry-failure", "image-mismatch", "not-ready", "traffic-not-converged", "promotion-command-failure", "post-promotion-failure")) {
         $global:PlimapDeploymentFixture = @{
             scenario = $scenario
             indexDigest = $indexDigest
@@ -153,7 +154,9 @@ try {
             default { $indexImage }
         }
         $resultPath = Join-Path $testDirectory "$scenario.json"
-        $appCdsEnabled = if ($scenario -eq "success-appcds-off") { "false" } else { "true" }
+        $appCdsEnabled = if ($scenario -in @("success-appcds-off", "success-aot", "success-startup")) { "false" } else { "true" }
+        $springAotEnabled = if ($scenario -eq 'success-aot') { 'true' } else { 'false' }
+        $probePolicy = if ($scenario -eq 'success-startup') { 'short' } else { 'baseline' }
         $startupMonitoringEnabled = if ($scenario -in @("success-instrumented", "success-uppercase")) { "true" } else { "false" }
         $appCdsInput = if ($scenario -eq "success-uppercase") { "TRUE" } else { $appCdsEnabled }
         $startupMonitoringInput = if ($scenario -eq "success-uppercase") { "TRUE" } else { $startupMonitoringEnabled }
@@ -162,6 +165,7 @@ try {
             & $deployPath -Image $inputImage -DeployCommit ("e" * 40) `
                 -ProfileImageBucket "test-profile-images" -VpcNetwork "test-vpc" -VpcSubnet "test-subnet" `
                 -AppCdsEnabled $appCdsInput -StartupMonitoringEnabled $startupMonitoringInput `
+                -SpringAotEnabled $springAotEnabled.ToUpperInvariant() -StartupProbePolicy $probePolicy.ToUpperInvariant() `
                 -ResultPath $resultPath
         } catch { $failure = $_.Exception.Message }
         $result = Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json
@@ -173,8 +177,14 @@ try {
             Assert-Equal $fixture.active $fixture.candidate "Traffic promotion"
             Assert-Equal $result.appCdsEnabled $appCdsEnabled "AppCDS audit record"
             Assert-Equal $result.startupMonitoringEnabled $startupMonitoringEnabled "Monitoring audit record"
+            Assert-Equal $result.springAotEnabled $springAotEnabled 'AOT audit record'
+            Assert-Equal $result.startupProbePolicy $probePolicy 'Probe audit record'
+            Assert-Equal ($result.startupProbe.periodSeconds * $result.startupProbe.failureThreshold) 120 'Startup timeout budget'
+            $probeArgument = '--startup-probe=' + (Get-StartupProbeArgument $probePolicy)
+            if (-not ($fixture.commands | Where-Object { $_.Contains($probeArgument) })) { throw 'Selected probe must reach gcloud.' }
             if (-not $fixture.environmentText.Contains("PLIMAP_APP_CDS_ENABLED: '$appCdsEnabled'") -or
-                -not $fixture.environmentText.Contains("PLIMAP_STARTUP_MONITORING_ENABLED: '$startupMonitoringEnabled'")) {
+                -not $fixture.environmentText.Contains("PLIMAP_STARTUP_MONITORING_ENABLED: '$startupMonitoringEnabled'") -or
+                -not $fixture.environmentText.Contains("PLIMAP_SPRING_AOT_ENABLED: '$springAotEnabled'")) {
                 throw "AppCDS/monitoring selection must survive env-vars-file replacement."
             }
         } else {

@@ -56,6 +56,9 @@ CORS와 OAuth 프론트 allowlist는 쉼표로 Origin을 구분합니다. CORS�
 | `YOUTUBE_API_KEY` | `plimap-dev-youtube-api-key` |
 | `SUPABASE_URL` | `plimap-dev-supabase-url` |
 | `SUPABASE_SECRET_KEY` | `plimap-dev-supabase-secret-key` |
+| `KAKAO_ADMIN_KEY` | `plimap-dev-kakao-admin-key` |
+| `APPLE_PRIVATE_KEY` | `plimap-dev-apple-private-key` |
+| `SOCIAL_TOKEN_ENCRYPTION_KEY` | `plimap-dev-social-token-encryption-key` |
 
 ## Dev 최초 입력 또는 값 교체
 
@@ -106,6 +109,10 @@ Kakao와 Google에는 dev 전용 OAuth client를 사용합니다. 각 Provider C
 | `PROD_VPC_NETWORK` | `VpcNetwork` | 필수, Direct VPC egress 대상 network |
 | `PROD_VPC_SUBNET` | `VpcSubnet` | 필수, `asia-northeast3` Cloud Run 전용 subnet |
 | `PROD_PUBLIC_SMOKE_ENABLED` | `PublicSmokeEnabled` | 운영값 `true`; 재해 복구 중 DNS 미연결 시에만 일시 `false` |
+| `PROD_APP_CDS_ENABLED` | `AppCdsEnabled` | 기본 `true`; 분리 cold-start 실험은 `false` |
+| `PROD_STARTUP_MONITORING_ENABLED` | `StartupMonitoringEnabled` | 워크플로 기본 `true`; 수동 스크립트 기본 `false` |
+| `PROD_SPRING_AOT_ENABLED` | `SpringAotEnabled` | 기본 `false`; ON 실험은 AppCDS OFF·baseline startup과만 조합 |
+| `PROD_STARTUP_PROBE_POLICY` | `StartupProbePolicy` | 기본 `baseline` (5초); startup 실험은 `short` (4초). [전환·원복](STARTUP_EXPERIMENTS.md) |
 
 `deploy-prod.ps1`은 다음 공개 애플리케이션 환경변수를 생성합니다.
 
@@ -141,6 +148,11 @@ Prod Secret은 Dev와 별도 ID와 값을 사용합니다. `deploy-prod.ps1`은 
 | `GOOGLE_CLIENT_ID` | `plimap-prod-google-client-id` |
 | `GOOGLE_CLIENT_SECRET` | `plimap-prod-google-client-secret` |
 | `YOUTUBE_API_KEY` | `plimap-prod-youtube-api-key` |
+| `KAKAO_ADMIN_KEY` | `plimap-prod-kakao-admin-key` |
+| `APPLE_PRIVATE_KEY` | `plimap-prod-apple-private-key` |
+| `SOCIAL_TOKEN_ENCRYPTION_KEY` | `plimap-prod-social-token-encryption-key` |
+
+`APPLE_PRIVATE_KEY`는 App Store Connect에서 받은 `.p8` 파일 내용 전체(PEM)이고, `SOCIAL_TOKEN_ENCRYPTION_KEY`는 `openssl rand -base64 32`로 만든 값입니다. 암호화 키를 바꾸면 이미 저장된 소셜 refresh token을 복호화할 수 없어 해당 회원은 탈퇴 시 재로그인을 거치므로, 한 번 정한 값은 교체하지 않습니다. Dev와 Prod는 서로 다른 값을 사용합니다.
 
 배포 결과와 Actions Summary에는 Secret ID와 선택된 숫자 버전만 기록합니다. 새 Secret 버전을 만든 뒤에는 다시 배포해야 새 revision이 해당 버전을 사용하며, 기존 revision과 rollback 대상 revision은 자신에게 고정된 버전을 계속 사용합니다.
 
