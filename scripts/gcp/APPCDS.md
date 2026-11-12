@@ -54,7 +54,7 @@ docker build --platform=linux/amd64 --tag plimap-appcds:local .
 
 모드와 무관하게 `-Xlog:cds=info`를 기록합니다. AppCDS 단독 ON은 기존 `-Xshare:auto`를 사용하므로 JDK·classpath·JVM 옵션 등이 맞지 않으면 앱이 일반 로딩으로 시작할 수 있습니다. AOT와 함께 켠 조합은 `-Xshare:on`으로 사용할 수 없는 archive를 시작 실패로 처리합니다. 어느 경우도 `APP_CDS_CONFIGURATION enabled=true`만으로 성공이라고 세지 않습니다. 해당 인스턴스의 JVM 로그에서 `/app/application.jsa`의 open과 dynamic archive mapping 성공, 실패·mismatch·disabled 메시지 여부를 확인해야 합니다. 상세한 애플리케이션 클래스 source 검증은 위의 로컬/CI 진단으로 수행합니다.
 
-`-Xshare:on` 강제 검증은 빌드 단계에만 사용합니다. 운영은 archive 불일치로 JVM을 무조건 종료시키지 않지만, fallback 표본은 정상 AppCDS 효과 표본에서 분리합니다. 대체 설정을 조용히 성공으로 처리하지 않습니다.
+`-Xshare:on` 강제 검증은 빌드 단계와 AOT·AppCDS 조합 실행에 사용합니다. AppCDS 단독 운영 모드는 `-Xshare:auto`로 archive 불일치 시 일반 로딩으로 fallback할 수 있으며, 해당 표본은 정상 AppCDS 효과 표본에서 분리합니다. 조합 모드는 같은 상황에서 JVM 시작에 실패하도록 하여 archive 미사용을 성공으로 처리하지 않습니다.
 
 기본 entrypoint는 전체 class-load 로그를 켜지 않습니다. 운영 본 측정에서 상세 진단을 추가하면 시작 오버헤드가 달라질 수 있으므로 모든 비교군에서 같은 설정을 사용하거나 별도 진단 기동으로 분리합니다. 임의의 `JAVA_TOOL_OPTIONS`로 classpath·archive를 바꾸거나 추가 agent를 주입한 실행은 기본 실험 조건과 구분합니다.
 
