@@ -2,6 +2,7 @@ package com.example.plimap.domain.pin.dto.response;
 
 import com.example.plimap.domain.pin.enums.AvailabilityStatus;
 import com.example.plimap.domain.pin.enums.ClusterLevel;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
 import java.time.Instant;
@@ -73,6 +74,8 @@ public class PinResponse {
             String placeName,
             String introduction,
             List<String> tags,
+            @Schema(description = "Current feed visibility for the authenticated PIN owner")
+            boolean feedOpen,
             String staticCreatedAt,
             Instant createdAt
     ) {}

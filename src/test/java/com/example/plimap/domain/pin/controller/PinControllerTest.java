@@ -28,6 +28,8 @@ import com.example.plimap.global.security.SecurityErrorResponseHandler;
 import com.example.plimap.global.security.TokenBlacklistService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -436,12 +438,13 @@ class PinControllerTest {
         verify(pinQueryService).findFeedListByMemberId(2L, 1L, null, 10, userLocation);
     }
 
-    @Test
-    void 내_핀_목록_조회에_성공하면_200을_반환한다() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void 내_핀_목록_조회에_성공하면_공개_상태와_200을_반환한다(boolean feedOpen) throws Exception {
         when(pinQueryService.findMyPinList(
                 1L, null, 10
         )).thenReturn(Pagination.<PinResponse.MyPin>builder()
-                .data(new ArrayList<>())
+                .data(List.of(PinResponse.MyPin.builder().pinId(54L).feedOpen(feedOpen).build()))
                 .pageSize(10)
                 .nextCursor(null)
                 .hasNext(false)
@@ -460,6 +463,8 @@ class PinControllerTest {
                 .andExpect(jsonPath("$.isSuccess").value(true))
                 .andExpect(jsonPath("$.code").value("PIN_MY_PIN_LIST_SEARCH_SUCCESS"))
                 .andExpect(jsonPath("$.message").value("내가 작성한 핀 목록이 조회되었습니다."))
+                .andExpect(jsonPath("$.result.data[0].pinId").value(54))
+                .andExpect(jsonPath("$.result.data[0].feedOpen").value(feedOpen))
                 .andExpect(jsonPath("$.result.hasNext").value(false))
                 .andExpect(jsonPath("$.result.pageSize").value(10));
     }

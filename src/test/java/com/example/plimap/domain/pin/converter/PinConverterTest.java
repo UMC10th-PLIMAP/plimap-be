@@ -1,14 +1,35 @@
 package com.example.plimap.domain.pin.converter;
 
+import com.example.plimap.domain.pin.entity.Pin;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 
 import static com.example.plimap.domain.pin.converter.PinConverter.parseCreatedAt;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.mockito.Mockito.*;
 
 class PinConverterTest {
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void 내_핀_응답에_실제_공개_상태를_포함한다(boolean feedOpen) {
+        // given
+        Pin pin = mock(Pin.class, RETURNS_DEEP_STUBS);
+        when(pin.isFeedPublic()).thenReturn(feedOpen);
+        when(pin.getPinTagList()).thenReturn(List.of());
+        when(pin.getCreatedAt()).thenReturn(Instant.parse("2026-07-25T12:00:00Z"));
+
+        // when
+        var response = PinConverter.toMyPin(pin);
+
+        // then
+        assertThat(response.feedOpen()).isEqualTo(feedOpen);
+    }
 
     Instant now = Instant.parse("2026-07-25T12:00:00Z");
 

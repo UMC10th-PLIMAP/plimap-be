@@ -89,6 +89,7 @@ public class PinConverter {
                 .trackTitle(pin.getPlaceTrack().getTrack().getTitle())
                 .artist(pin.getPlaceTrack().getTrack().getArtistName())
                 .placeName(pin.getPlace().getName())
+                .feedOpen(pin.isFeedPublic())
                 .introduction(pin.getIntroduction())
                 .tags(pin.getPinTagList().stream().map(pinTag -> pinTag.getTag().getName()).toList())
                 .staticCreatedAt(parseCreatedAt(pin.getCreatedAt(), Instant.now()))
