@@ -181,9 +181,10 @@ class PlaceOpenApiIntegrationTest {
         assertThat(operation.path("description").asText())
                 .contains("최대 6개")
                 .contains("반경 제한 없이")
-                .contains("실제 거리 ASC, 활성 PIN 수 DESC, placeId ASC")
+                .contains("신고한 PIN과 회원의 PIN")
+                .contains("실제 거리 ASC, 조회 가능한 PIN 수 DESC, placeId ASC")
                 .contains("REGION3, REGION2, REGION1, GLOBAL")
-                .contains("활성 PIN 수 DESC, 실제 거리 ASC, placeId ASC")
+                .contains("조회 가능한 PIN 수 DESC, 실제 거리 ASC, placeId ASC")
                 .contains("이전 결과를 버리고")
                 .contains("H 결과가 없으면 전국")
                 .contains("전국 결과는 6개 미만이어도 반환")
@@ -223,6 +224,8 @@ class PlaceOpenApiIntegrationTest {
         assertThat(itemProperties.has("placeName")).isTrue();
         assertThat(itemProperties.has("distanceMeters")).isTrue();
         assertThat(itemProperties.has("pinCount")).isTrue();
+        assertThat(itemProperties.path("pinCount").path("description").asText())
+                .contains("요청자에게 조회 가능한 활성 PIN 수");
         assertThat(itemProperties.has("representativeImageUrl")).isTrue();
         assertThat(isNullableSchema(itemProperties.path("representativeImageUrl"))).isTrue();
     }

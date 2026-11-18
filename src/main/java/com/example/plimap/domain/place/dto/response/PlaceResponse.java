@@ -122,7 +122,7 @@ public final class PlaceResponse {
             String placeName,
             @Schema(description = "사용자 현재 위치 기준 반올림 거리(m)", example = "50")
             Integer distanceMeters,
-            @Schema(description = "전체 활성 PIN 수", example = "30")
+            @Schema(description = "요청자에게 조회 가능한 활성 PIN 수", example = "30")
             Long pinCount,
             @Schema(
                     description = "대표 PlaceTrack의 앨범 이미지 URL. 없으면 null",

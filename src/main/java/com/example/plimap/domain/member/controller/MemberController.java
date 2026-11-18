@@ -154,10 +154,12 @@ public class MemberController implements MemberControllerDocs {
     @DeleteMapping("/me")
     public ApiResponse<Void> withdraw(
             @AuthenticationPrincipal AuthMember authMember,
+            @RequestBody(required = false) MemberReqDTO.Withdraw withdrawRequest,
             HttpServletRequest request,
             HttpServletResponse response
     ) {
-        memberCommandService.withdraw(authMember.getMember().getId());
+        String reauthCode = withdrawRequest == null ? null : withdrawRequest.authorizationCode();
+        memberCommandService.withdraw(authMember.getMember().getId(), reauthCode);
 
         sessionInvalidationService.invalidate(request, response);
 

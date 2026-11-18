@@ -623,7 +623,7 @@ class ClusterPinListTest {
         List<Long> placeIds = new ArrayList<>(List.of(place6.getId(), place5.getId()));
 
         // when
-        Map<Long, AlbumImage> result = pinQueryRepository.findRepresentativePlaceTracksByPlaceIds(placeIds);
+        Map<Long, AlbumImage> result = pinQueryRepository.findRepresentativePlaceTracksByPlaceIds(placeIds, 1L);
 
         // then
         assertThat(result.size()).isEqualTo(2);
@@ -639,7 +639,7 @@ class ClusterPinListTest {
         List<Long> placeIds = new ArrayList<>(List.of(place6.getId(), place7.getId()));
 
         // when
-        Map<Long, AlbumImage> result = pinQueryRepository.findRepresentativePlaceTracksByPlaceIds(placeIds);
+        Map<Long, AlbumImage> result = pinQueryRepository.findRepresentativePlaceTracksByPlaceIds(placeIds, 1L);
 
         // then
         assertThat(result.get(place7.getId()).albumImageUrl())
@@ -652,7 +652,7 @@ class ClusterPinListTest {
         entityManager.flush();
         entityManager.clear();
 
-        Map<Long, AlbumImage> result2 = pinQueryRepository.findRepresentativePlaceTracksByPlaceIds(placeIds);
+        Map<Long, AlbumImage> result2 = pinQueryRepository.findRepresentativePlaceTracksByPlaceIds(placeIds, 1L);
 
         // then
         assertThat(result2.get(place7.getId()).albumImageUrl())
@@ -671,7 +671,7 @@ class ClusterPinListTest {
 
         entityManager.flush();
         entityManager.clear();
-        Map<Long, AlbumImage> result = pinQueryRepository.findRepresentativePlaceTracksByPlaceIds(placeIds);
+        Map<Long, AlbumImage> result = pinQueryRepository.findRepresentativePlaceTracksByPlaceIds(placeIds, 1L);
 
         // then
         assertThat(result.get(place7.getId()).albumImageUrl())

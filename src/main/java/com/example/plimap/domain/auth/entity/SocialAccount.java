@@ -33,6 +33,10 @@ public class SocialAccount extends BaseEntity {
     @Column(name = "email", length = 320)
     private String email;
 
+    // 탈퇴 시 애플/구글 연결 끊기(revoke)에 쓰는 provider refresh token. SocialTokenCipher로 암호화된 값이다.
+    @Column(name = "encrypted_refresh_token")
+    private String encryptedRefreshToken;
+
     @Builder
     private SocialAccount(Member member, AuthProvider provider, String providerSubject, String email) {
         this.member = member;
@@ -48,5 +52,9 @@ public class SocialAccount extends BaseEntity {
                 .providerSubject(providerSubject)
                 .email(email)
                 .build();
+    }
+
+    public void updateEncryptedRefreshToken(String encryptedRefreshToken) {
+        this.encryptedRefreshToken = encryptedRefreshToken;
     }
 }

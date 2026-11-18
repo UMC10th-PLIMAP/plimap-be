@@ -12,6 +12,13 @@ RUN chmod +x gradlew
 COPY src ./src
 RUN ./gradlew bootJar --no-daemon
 
+# Resolve dependencies before the network-isolated prod Bean definition generation.
+FROM builder AS aot-builder
+COPY scripts/spring-aot/generation.properties scripts/spring-aot/generation.properties
+COPY scripts/appcds/training-credentials.json scripts/appcds/training-credentials.json
+RUN ./gradlew -PplimapAot=true resolveAotDependencies --no-daemon
+RUN --network=none ./gradlew -PplimapAot=true verifyAotArtifact --offline --no-daemon
+
 FROM ${RUNTIME_IMAGE} AS runtime-base
 
 RUN useradd --system --uid 10001 --user-group --create-home spring \
@@ -32,8 +39,9 @@ ENTRYPOINT ["java", "-jar", "/app/app.jar"]
 # Train with the exact same JRE, paths and application classpath as runtime.
 # No production environment, credentials or network is available to this RUN.
 FROM runtime-base AS appcds-training
-COPY --from=builder --chown=spring:spring /workspace/build/libs/*.jar /tmp/application.jar
+COPY --from=aot-builder --chown=spring:spring /workspace/build/libs/*.jar /tmp/application.jar
 RUN java -Djarmode=tools -jar /tmp/application.jar extract --destination /app --application-filename app.jar
+COPY --from=aot-builder --chown=spring:spring /workspace/build/spring-aot/profile /app/spring-aot-profile
 COPY --chown=spring:spring scripts/appcds/training.properties /tmp/appcds-training.properties
 COPY --chown=spring:spring scripts/appcds/training-credentials.json /tmp/appcds-training-credentials.json
 RUN --network=none export GOOGLE_APPLICATION_CREDENTIALS=/tmp/appcds-training-credentials.json \
@@ -54,4 +62,5 @@ FROM runtime-base AS runtime
 COPY --from=appcds-training --chown=spring:spring /app/ /app/
 COPY --chown=spring:spring --chmod=755 scripts/appcds/entrypoint.sh /app/entrypoint.sh
 ENV PLIMAP_APP_CDS_ENABLED=true
+ENV PLIMAP_SPRING_AOT_ENABLED=false
 ENTRYPOINT ["/app/entrypoint.sh"]

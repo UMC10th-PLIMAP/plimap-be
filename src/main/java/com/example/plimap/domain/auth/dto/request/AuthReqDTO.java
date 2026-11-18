@@ -22,7 +22,12 @@ public class AuthReqDTO {
 
             @NotBlank
             @Schema(description = "앱이 provider SDK로 발급받은 토큰(카카오는 액세스 토큰, 구글/애플은 ID 토큰)")
-            String token
+            String token,
+
+            @Schema(description = """
+                    탈퇴 시 연결 끊기에 쓰는 1회용 code(선택). 애플은 authorizationCode, 구글은 serverAuthCode를 보냅니다.
+                    카카오는 보내지 않습니다. 없거나 교환에 실패해도 로그인은 성공합니다.""")
+            String authorizationCode
     ) {
     }
 

@@ -19,6 +19,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.security.web.csrf.CsrfToken;
 
@@ -31,6 +32,10 @@ public interface AuthControllerDocs {
                     앱이 카카오/구글/애플 SDK로 발급받은 토큰(카카오는 액세스 토큰, 구글/애플은 ID 토큰)을 전달하면
                     서버가 provider에 직접 토큰을 검증하고 accessToken/refreshToken을 JSON 응답으로 반환합니다.
                     기존 웹 로그인(OAuth2Login 리다이렉트 + 쿠키)과는 별개의 흐름입니다.
+
+                    애플/구글은 authorizationCode(애플 authorizationCode, 구글 serverAuthCode)를 함께 보내면
+                    서버가 refresh token으로 교환해 저장해 두고, 회원 탈퇴 시 이 토큰으로 provider 연결을 끊습니다.
+                    없거나 교환에 실패해도 로그인은 성공하며, 이 경우 탈퇴할 때 재로그인을 한 번 거칩니다.
 
                     정지/자동탈퇴 회원은 200 응답에 accessToken 없이 status/reasonCategory/reasonDetail/suspendedUntil 등
                     제재 정보만 채워서 반환합니다.
@@ -84,15 +89,16 @@ public interface AuthControllerDocs {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
             description = "요청 성공(제재 회원은 토큰 없이 제재 정보만 포함)")
-    ApiResponse<AuthResponse.AppLogin> appLogin(AuthReqDTO.AppLogin request);
+    ApiResponse<AuthResponse.AppLogin> appLogin(@Valid AuthReqDTO.AppLogin request);
 
     @Operation(
             summary = "앱 로그인 시도용 nonce 발급",
             description = """
                     Apple 로그인에서 ID 토큰 재전송(replay) 공격을 막기 위한 1회용 nonce를 발급합니다.
-                    앱은 이 값을 Apple 인증 요청(ASAuthorizationAppleIDRequest.nonce 등)에 그대로 실어 보내고,
-                    돌아온 ID 토큰을 /api/v1/auth/app/login으로 전달하면 서버가 토큰의 nonce claim과 대조해 1회만
-                    소비합니다. 5분 내에 로그인에 사용하지 않으면 만료됩니다.
+                    @invertase/react-native-apple-authentication을 쓰면 발급받은 값을 그대로 nonce 옵션에 넘깁니다
+                    (라이브러리가 SHA-256으로 해시해 보냅니다). ASAuthorizationAppleIDRequest.nonce를 직접 쓰는 경우에만
+                    SHA-256(소문자 hex)으로 해시해 넣습니다. 돌아온 ID 토큰을
+                    /api/v1/auth/app/login으로 전달하면 서버가 토큰의 nonce claim(해시 값)과 대조해 1회만 소비합니다. 5분 내에 로그인에 사용하지 않으면 만료됩니다.
                     """
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -184,7 +190,7 @@ public interface AuthControllerDocs {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
             description = "요청 성공")
-    ApiResponse<MemberResponse.Onboarding> onboarding(AuthMember authMember, MemberReqDTO.Onboarding request);
+    ApiResponse<MemberResponse.Onboarding> onboarding(AuthMember authMember, @Valid MemberReqDTO.Onboarding request);
 
     @Operation(
             summary = "약관 동의 여부 조회",
@@ -314,7 +320,7 @@ public interface AuthControllerDocs {
                             }
                     ))
     })
-    ApiResponse<List<TermsResponse.Result>> agreeToTerms(AuthMember authMember, TermsReqDTO.Agree request);
+    ApiResponse<List<TermsResponse.Result>> agreeToTerms(AuthMember authMember, @Valid TermsReqDTO.Agree request);
 
     @Operation(
             summary = "로그아웃",
@@ -423,5 +429,5 @@ public interface AuthControllerDocs {
     @io.swagger.v3.oas.annotations.responses.ApiResponse(
             responseCode = "200",
             description = "요청 성공")
-    ApiResponse<AuthResponse.AppTokenReissue> appReissue(AuthReqDTO.AppReissue request);
+    ApiResponse<AuthResponse.AppTokenReissue> appReissue(@Valid AuthReqDTO.AppReissue request);
 }

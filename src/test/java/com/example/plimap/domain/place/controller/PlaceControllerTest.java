@@ -118,6 +118,7 @@ class PlaceControllerTest {
     @Test
     void 인기_장소_목록_조회에_성공하면_명세_응답을_반환한다() throws Exception {
         when(placeQueryService.getPopularPlaces(
+                1L,
                 PopularPlaceScope.NEARBY,
                 37.5283,
                 126.9326
@@ -153,6 +154,7 @@ class PlaceControllerTest {
                         .value(nullValue()));
 
         verify(placeQueryService).getPopularPlaces(
+                1L,
                 PopularPlaceScope.NEARBY,
                 37.5283,
                 126.9326
@@ -228,6 +230,7 @@ class PlaceControllerTest {
     @Test
     void 인기_장소_행정구역_변환_오류는_502를_반환한다() throws Exception {
         when(placeQueryService.getPopularPlaces(
+                1L,
                 PopularPlaceScope.GLOBAL, 37.5283, 126.9326
         )).thenThrow(new PlaceException(PlaceErrorCode.PLACE_EXTERNAL_API_ERROR));
 
@@ -243,6 +246,7 @@ class PlaceControllerTest {
     @Test
     void 인기_장소_행정구역_변환_timeout은_504를_반환한다() throws Exception {
         when(placeQueryService.getPopularPlaces(
+                1L,
                 PopularPlaceScope.GLOBAL, 37.5283, 126.9326
         )).thenThrow(new PlaceException(PlaceErrorCode.PLACE_EXTERNAL_API_TIMEOUT));
 

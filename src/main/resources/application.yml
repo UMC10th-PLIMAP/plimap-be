@@ -103,6 +103,8 @@ kakao:
     base-url: https://kapi.kakao.com
     connect-timeout: 2s
     read-timeout: 5s
+    # 탈퇴 시 카카오 연결 끊기(unlink)에 쓰는 어드민 키
+    admin-key: ${KAKAO_ADMIN_KEY:}
 
 # 구글/애플 JWKS 조회(ID 토큰 서명 검증용) 타임아웃
 oidc:
@@ -116,8 +118,25 @@ app-oauth:
   google:
     client-id: ${GOOGLE_APP_CLIENT_ID:${spring.security.oauth2.client.registration.google.client-id}}
   apple:
-    # kr.plimap.app: iOS 앱 Bundle ID(=Apple 로그인 aud 값). 비밀값이 아니라 공개 식별자라 기본값으로 고정.
-    client-id: ${APPLE_APP_CLIENT_ID:kr.plimap.app}
+    # kr.plimap.ios: iOS 앱 Bundle ID(=Apple 로그인 aud 값). 비밀값이 아니라 공개 식별자라 기본값으로 고정.
+    client-id: ${APPLE_APP_CLIENT_ID:kr.plimap.ios}
+
+# 탈퇴 시 애플/구글 연결 끊기(revoke)에 쓰는 토큰 교환 설정
+apple:
+  auth:
+    client-id: ${app-oauth.apple.client-id}
+    # Team ID와 Key ID는 공개 식별자라 기본값으로 고정하고, .p8 키 내용만 비밀값으로 주입한다.
+    team-id: ${APPLE_TEAM_ID:L293Y3AKJF}
+    key-id: ${APPLE_KEY_ID:UJDRBU4M8V}
+    private-key: ${APPLE_PRIVATE_KEY:}
+google:
+  auth:
+    client-id: ${spring.security.oauth2.client.registration.google.client-id}
+    client-secret: ${spring.security.oauth2.client.registration.google.client-secret}
+
+# DB에 저장하는 provider refresh token 암호화 키(Base64 32바이트, 예: openssl rand -base64 32)
+social-token:
+  encryption-key: ${SOCIAL_TOKEN_ENCRYPTION_KEY}
 
 # iTunes Search API 설정
 itunes:

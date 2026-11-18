@@ -2,6 +2,7 @@ package com.example.plimap.domain.auth.service.command.impl;
 
 import com.example.plimap.domain.auth.entity.AuthMember;
 import com.example.plimap.domain.auth.entity.OAuthMember;
+import com.example.plimap.domain.auth.service.command.SocialAccountCommandService;
 import com.example.plimap.global.security.AuthCookieUtil;
 import com.example.plimap.global.security.JwtUtil;
 import com.example.plimap.global.security.OAuthFrontendRedirectCookieRepository;
@@ -10,12 +11,17 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.UriComponentsBuilder;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class OAuthSuccessHandler implements AuthenticationSuccessHandler {
@@ -24,12 +30,15 @@ public class OAuthSuccessHandler implements AuthenticationSuccessHandler {
     private final RefreshTokenService refreshTokenService;
     private final AuthCookieUtil authCookieUtil;
     private final OAuthFrontendRedirectCookieRepository redirectCookieRepository;
+    private final OAuth2AuthorizedClientRepository authorizedClientRepository;
+    private final SocialAccountCommandService socialAccountCommandService;
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request,
                                         HttpServletResponse response,
                                         Authentication authentication) throws IOException {
         OAuthMember oAuthMember = (OAuthMember) authentication.getPrincipal();
+        saveGoogleRefreshToken(request, response, authentication, oAuthMember.getMember().getId());
         AuthMember authMember = new AuthMember(oAuthMember.getMember());
         String accessToken = jwtUtil.createAccessToken(authMember);
         String refreshToken = jwtUtil.createRefreshToken(authMember);
@@ -58,5 +67,30 @@ public class OAuthSuccessHandler implements AuthenticationSuccessHandler {
                 .toUriString();
 
         response.sendRedirect(redirectUrl);
+    }
+
+    // 구글은 access_type=offline으로 요청해 처음 동의할 때 refresh token을 내려준다(SecurityConfig).
+    // 탈퇴 시 연결을 끊는 데 쓰도록 저장하고, 서버는 provider 토큰을 다른 용도로 쓰지 않으므로
+    // Spring이 메모리에 보관한 authorized client는 바로 지운다.
+    private void saveGoogleRefreshToken(HttpServletRequest request, HttpServletResponse response,
+                                        Authentication authentication, Long memberId) {
+        if (!(authentication instanceof OAuth2AuthenticationToken token)) {
+            return;
+        }
+        String registrationId = token.getAuthorizedClientRegistrationId();
+        OAuth2AuthorizedClient client =
+                authorizedClientRepository.loadAuthorizedClient(registrationId, authentication, request);
+        if (client == null) {
+            return;
+        }
+        // 저장 실패는 앱 로그인과 같이 로그인을 막지 않는다(탈퇴 시 재로그인 경로로 보완).
+        try {
+            if ("google".equals(registrationId) && client.getRefreshToken() != null) {
+                socialAccountCommandService.saveRefreshToken(memberId, client.getRefreshToken().getTokenValue());
+            }
+        } catch (RuntimeException exception) {
+            log.warn("웹 구글 refresh token 저장 실패 memberId={}", memberId, exception);
+        }
+        authorizedClientRepository.removeAuthorizedClient(registrationId, authentication, request, response);
     }
 }

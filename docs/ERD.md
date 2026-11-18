@@ -2,7 +2,7 @@
 
 > 위치 기반 음악 공유 서비스 데이터베이스 설계서
 >
-> v0.10.0 | 2026-08-07
+> v0.12.0 | 2026-11-02
 
 ---
 
@@ -12,7 +12,7 @@
 |---|---|---|
 | **member** | member | 회원 프로필, 닉네임, 이름, 소개, 온보딩 상태, 가입 provider·권한·벌점/정지/탈퇴 사유·신고 카운트 |
 |  | member_follow | 회원 간 팔로우 관계 |
-|  | social_account | 카카오, 구글, 애플 소셜 계정 |
+|  | social_account | 카카오, 구글, 애플 소셜 계정, 탈퇴 시 연결 끊기용 애플/구글 refresh token(암호화) |
 |  | terms | 이용약관 및 개인정보 처리방침 버전 |
 |  | member_terms_agreement | 회원별 약관 동의 이력 |
 | **place** | place | 장소 검색·주소 검색 또는 지도에서 선택한 장소와 PostGIS 위치 |
@@ -240,6 +240,7 @@ CREATE TABLE social_account
     provider         VARCHAR(20)  NOT NULL,
     provider_subject VARCHAR(255) NOT NULL,
     email            VARCHAR(320),
+    encrypted_refresh_token TEXT,
     created_at       TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at       TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT pk_social_account PRIMARY KEY (id),
@@ -806,3 +807,4 @@ CREATE INDEX idx_inquiry_member_id ON inquiry (member_id);
 | 0.10.0 | 2026-08-07 | 로그인 여부와 무관하게 접수하는 문의를 위한 `inquiry` 테이블과 `InquiryCategory`를 추가. `member_id`는 nullable(비로그인·탈퇴 회원은 null)이며 `ON DELETE SET NULL`로 연결 |
 | 0.11.0 | 2026-08-12 | 관리자가 기간·사유를 직접 선택/작성하는 최종 제재 API를 위해 member에 `last_penalty_category`·`last_penalty_detail` 컬럼과 `report`와 동일한 카테고리·detail 정합성 제약 추가 |
 | 0.11.1 | 2026-08-13 | 프론트가 "누적 N회차 (N일 정지)" 형태로 제재 상태를 표시할 수 있도록 member에 `last_penalty_period` 컬럼과 `SuspensionPeriod` 값 제약 추가 |
+| 0.12.0 | 2026-11-02 | 회원 탈퇴 시 애플/구글 연결을 끊기(revoke) 위해 social_account에 provider refresh token을 AES-GCM으로 암호화해 담는 `encrypted_refresh_token` 컬럼 추가. 카카오는 어드민 키로 연결을 끊으므로 저장하지 않음 |

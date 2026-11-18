@@ -16,6 +16,7 @@ import com.example.plimap.domain.auth.dto.request.AuthReqDTO;
 import com.example.plimap.domain.auth.dto.response.AuthResponse;
 import com.example.plimap.domain.auth.entity.AuthMember;
 import com.example.plimap.domain.auth.enums.AuthProvider;
+import com.example.plimap.domain.auth.service.command.SocialAccountCommandService;
 import com.example.plimap.domain.auth.exception.AuthException;
 import com.example.plimap.domain.auth.exception.SanctionedMemberAuthenticationException;
 import com.example.plimap.domain.member.entity.Member;
@@ -46,10 +47,12 @@ class AppOAuthCommandServiceImplTest {
     private final RefreshTokenService refreshTokenService = mock(RefreshTokenService.class);
     private final AppLoginNonceService appLoginNonceService = mock(AppLoginNonceService.class);
     private final MemberRepository memberRepository = mock(MemberRepository.class);
+    private final SocialAccountCommandService socialAccountCommandService = mock(SocialAccountCommandService.class);
 
     private final AppOAuthCommandServiceImpl service = new AppOAuthCommandServiceImpl(
             customOAuthService, kakaoUserApiClient, idTokenVerifier, jwtUtil, refreshTokenService,
-            appLoginNonceService, memberRepository, "google-app-client-id", "apple-app-client-id"
+            appLoginNonceService, memberRepository, socialAccountCommandService,
+            "google-app-client-id", "apple-app-client-id"
     );
 
     @Test
@@ -76,7 +79,7 @@ class AppOAuthCommandServiceImplTest {
         when(jwtUtil.getJti("refresh-token")).thenReturn("jti-1");
         when(jwtUtil.getRefreshTokenExpiry()).thenReturn(Duration.ofDays(14));
 
-        AuthResponse.AppLogin result = service.login(new AuthReqDTO.AppLogin(AuthProvider.KAKAO, "kakao-access-token"));
+        AuthResponse.AppLogin result = service.login(new AuthReqDTO.AppLogin(AuthProvider.KAKAO, "kakao-access-token", null));
 
         assertThat(result.accessToken()).isEqualTo("access-token");
         assertThat(result.refreshToken()).isEqualTo("refresh-token");
@@ -107,7 +110,7 @@ class AppOAuthCommandServiceImplTest {
         when(jwtUtil.getRefreshTokenExpiry()).thenReturn(Duration.ofDays(14));
 
         // when
-        service.login(new AuthReqDTO.AppLogin(AuthProvider.KAKAO, "kakao-access-token"));
+        service.login(new AuthReqDTO.AppLogin(AuthProvider.KAKAO, "kakao-access-token", null));
 
         // then
         assertThat(dtoCaptor.getValue().getEmail()).isNull();
@@ -120,7 +123,7 @@ class AppOAuthCommandServiceImplTest {
                 .thenThrow(new KakaoClientException("Kakao User API request failed"));
 
         // when & then
-        assertThatThrownBy(() -> service.login(new AuthReqDTO.AppLogin(AuthProvider.KAKAO, "invalid-token")))
+        assertThatThrownBy(() -> service.login(new AuthReqDTO.AppLogin(AuthProvider.KAKAO, "invalid-token", null)))
                 .isInstanceOf(AuthException.class);
         verifyNoInteractions(customOAuthService, jwtUtil, refreshTokenService);
     }
@@ -142,7 +145,7 @@ class AppOAuthCommandServiceImplTest {
         SanctionedMemberAuthenticationException sanctioned = new SanctionedMemberAuthenticationException(member);
         when(customOAuthService.resolveMember(any(), any())).thenThrow(sanctioned);
 
-        AuthResponse.AppLogin result = service.login(new AuthReqDTO.AppLogin(AuthProvider.KAKAO, "kakao-access-token"));
+        AuthResponse.AppLogin result = service.login(new AuthReqDTO.AppLogin(AuthProvider.KAKAO, "kakao-access-token", null));
 
         assertThat(result.accessToken()).isNull();
         assertThat(result.refreshToken()).isNull();
@@ -170,7 +173,7 @@ class AppOAuthCommandServiceImplTest {
         when(jwtUtil.getRefreshTokenExpiry()).thenReturn(Duration.ofDays(14));
 
         // when
-        service.login(new AuthReqDTO.AppLogin(AuthProvider.GOOGLE, "verified-token"));
+        service.login(new AuthReqDTO.AppLogin(AuthProvider.GOOGLE, "verified-token", null));
 
         // then
         assertThat(dtoCaptor.getValue().getEmail()).isEqualTo("user@gmail.com");
@@ -196,7 +199,7 @@ class AppOAuthCommandServiceImplTest {
         when(jwtUtil.getRefreshTokenExpiry()).thenReturn(Duration.ofDays(14));
 
         // when
-        service.login(new AuthReqDTO.AppLogin(AuthProvider.GOOGLE, "unverified-token"));
+        service.login(new AuthReqDTO.AppLogin(AuthProvider.GOOGLE, "unverified-token", null));
 
         // then
         assertThat(dtoCaptor.getValue().getEmail()).isNull();
@@ -218,12 +221,27 @@ class AppOAuthCommandServiceImplTest {
         when(jwtUtil.getRefreshTokenExpiry()).thenReturn(Duration.ofDays(14));
 
         // when
-        AuthResponse.AppLogin result = service.login(new AuthReqDTO.AppLogin(AuthProvider.APPLE, "apple-token"));
+        AuthResponse.AppLogin result = service.login(new AuthReqDTO.AppLogin(AuthProvider.APPLE, "apple-token", null));
 
         // then
         assertThat(result.accessToken()).isEqualTo("access-token");
         assertThat(dtoCaptor.getValue().getProviderSubject()).isEqualTo("apple-subject-1");
         assertThat(dtoCaptor.getValue().getEmail()).isNull();
+    }
+
+    @Test
+    void 애플_로그인에_authorizationCode가_있으면_refresh_token_저장을_요청한다() {
+        Claims claims = Jwts.claims(Map.of("sub", "apple-subject-1", "nonce", "nonce-value"));
+        when(idTokenVerifier.verify(anyString(), any(), anyString(), eq("apple-token"))).thenReturn(claims);
+        when(appLoginNonceService.consume("nonce-value")).thenReturn(true);
+        Member member = mock(Member.class);
+        when(member.getId()).thenReturn(7L);
+        when(customOAuthService.resolveMember(eq(AuthProvider.APPLE), any())).thenReturn(member);
+        when(jwtUtil.getRefreshTokenExpiry()).thenReturn(Duration.ofDays(14));
+
+        service.login(new AuthReqDTO.AppLogin(AuthProvider.APPLE, "apple-token", "apple-code"));
+
+        verify(socialAccountCommandService).saveRefreshTokenByCode(7L, AuthProvider.APPLE, "apple-code");
     }
 
     @Test
@@ -234,7 +252,7 @@ class AppOAuthCommandServiceImplTest {
         when(appLoginNonceService.consume(any())).thenReturn(false);
 
         // when & then
-        assertThatThrownBy(() -> service.login(new AuthReqDTO.AppLogin(AuthProvider.APPLE, "replayed-token")))
+        assertThatThrownBy(() -> service.login(new AuthReqDTO.AppLogin(AuthProvider.APPLE, "replayed-token", null)))
                 .isInstanceOf(AuthException.class);
         verifyNoInteractions(customOAuthService, jwtUtil, refreshTokenService);
     }
@@ -246,7 +264,7 @@ class AppOAuthCommandServiceImplTest {
         when(idTokenVerifier.verify(anyString(), any(), anyString(), eq("no-sub-token"))).thenReturn(claims);
 
         // when & then
-        assertThatThrownBy(() -> service.login(new AuthReqDTO.AppLogin(AuthProvider.GOOGLE, "no-sub-token")))
+        assertThatThrownBy(() -> service.login(new AuthReqDTO.AppLogin(AuthProvider.GOOGLE, "no-sub-token", null)))
                 .isInstanceOf(MemberException.class);
         verifyNoInteractions(customOAuthService, jwtUtil, refreshTokenService);
     }
@@ -259,7 +277,7 @@ class AppOAuthCommandServiceImplTest {
         when(appLoginNonceService.consume("nonce-value")).thenReturn(true);
 
         // when & then
-        assertThatThrownBy(() -> service.login(new AuthReqDTO.AppLogin(AuthProvider.APPLE, "no-sub-token")))
+        assertThatThrownBy(() -> service.login(new AuthReqDTO.AppLogin(AuthProvider.APPLE, "no-sub-token", null)))
                 .isInstanceOf(MemberException.class);
         verifyNoInteractions(customOAuthService, jwtUtil, refreshTokenService);
     }

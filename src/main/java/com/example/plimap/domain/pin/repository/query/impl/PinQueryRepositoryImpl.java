@@ -98,6 +98,19 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
             ORDER BY pl.id, p.created_at ASC, p.id ASC;
             """;
 
+    private static final String VISIBLE_REPRESENTATIVE_PIN_CONDITION = """
+                           AND p.report_count < %d
+                           AND NOT EXISTS (
+                               SELECT 1 FROM report r
+                               WHERE r.reporter_member_id = :viewerId
+                                 AND r.reported_pin_id = p.id
+                           )
+                           AND NOT EXISTS (
+                               SELECT 1 FROM report r
+                               WHERE r.reporter_member_id = :viewerId
+                                 AND r.reported_member_id = p.member_id
+                           )
+            """.formatted(REPORT_HIDE_THRESHOLD);
     private static final String REPRESENTATIVE_PLACE_TRACK = """
                 representative_place_track AS (
                     SELECT DISTINCT ON (pt.place_id)
@@ -109,6 +122,7 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
                     JOIN pin p
                             ON p.place_track_id = pt.id
                            AND p.deleted_at IS NULL
+                """ + VISIBLE_REPRESENTATIVE_PIN_CONDITION + """
                     LEFT JOIN pin_count pc
                         ON pc.place_track_id = pt.id
                     WHERE
@@ -131,6 +145,8 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
                          COUNT(*) AS active_pin_count
                      FROM pin p
                      WHERE p.deleted_at IS NULL
+                       AND p.place_id IN (:placeIds)
+                 """ + VISIBLE_REPRESENTATIVE_PIN_CONDITION + """
                      GROUP BY p.place_track_id
                  )
         """;
@@ -612,7 +628,9 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
     }
 
     @Override
-    public Map<Long, AlbumImage> findRepresentativePlaceTracksByPlaceIds(List<Long> placeIds) {
+    public Map<Long, AlbumImage> findRepresentativePlaceTracksByPlaceIds(
+            List<Long> placeIds, Long viewerId
+    ) {
         List<Long> placeTrackIds = entityManager.createNativeQuery(
                         PIN_COUNT
                                 + ","
@@ -623,6 +641,7 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
                                 """
                 )
                 .setParameter("placeIds", placeIds)
+                .setParameter("viewerId", viewerId)
                 .getResultList();
 
         List<PlaceTrack> placeTracks = queryFactory

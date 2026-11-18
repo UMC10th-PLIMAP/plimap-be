@@ -706,6 +706,10 @@ public interface MemberControllerDocs {
                     - 팔로우/팔로워 관계는 양방향 모두 삭제됩니다.
                     - 소셜 계정 연동 정보는 삭제되어, 이후 동일한 소셜 계정으로 재가입할 수 있습니다.
                     - 처리 후 현재 세션의 액세스/리프레시 토큰을 무효화하고 로그아웃 쿠키를 반환합니다.
+                    - 탈퇴 전에 소셜 로그인 연결을 끊습니다. 카카오는 서버가 바로 끊고, 애플/구글은 로그인 때 저장한 토큰으로 끊습니다.
+                    - 애플/구글 연결을 끊지 못하면(저장된 토큰 없음·만료) 409 `AUTH_APPLE_REAUTH_REQUIRED` / `AUTH_GOOGLE_REAUTH_REQUIRED`를 반환하고 탈퇴하지 않습니다. 앱은 해당 provider로 다시 로그인해 받은 code를 요청 바디 `authorizationCode`에 담아 다시 호출합니다.
+                    - 요청 바디는 재시도할 때만 보내며, 처음 요청은 바디 없이 호출합니다.
+                    - 웹에서 `AUTH_GOOGLE_REAUTH_REQUIRED`를 받으면 `/oauth/authorization/google?reauth=true`로 구글 로그인을 다시 진행합니다. 이때만 동의 화면이 표시되고 새 refresh token이 저장되므로, 돌아온 뒤 바디 없이 다시 호출합니다. 재로그인 전후 회원이 다르면(다른 구글 계정 선택) 탈퇴를 이어가지 않아야 합니다.
                     """
     )
     @ApiResponses({
@@ -723,14 +727,38 @@ public interface MemberControllerDocs {
                     )),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "409",
-                    description = "탈퇴 회원 마스킹 닉네임이 중복된 경우",
+                    description = "탈퇴 회원 마스킹 닉네임이 중복됐거나, 소셜 연결을 끊으려면 재로그인이 필요한 경우",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = ErrorApiResponse.class),
+                            examples = {
+                                    @ExampleObject(
+                                            name = "MEMBER_NICKNAME_DUPLICATE",
+                                            summary = "마스킹 닉네임 중복",
+                                            value = MemberSwaggerErrorExamples.NICKNAME_DUPLICATE
+                                    ),
+                                    @ExampleObject(
+                                            name = "AUTH_APPLE_REAUTH_REQUIRED",
+                                            summary = "애플 재로그인 필요",
+                                            value = MemberSwaggerErrorExamples.APPLE_REAUTH_REQUIRED
+                                    ),
+                                    @ExampleObject(
+                                            name = "AUTH_GOOGLE_REAUTH_REQUIRED",
+                                            summary = "구글 재로그인 필요",
+                                            value = MemberSwaggerErrorExamples.GOOGLE_REAUTH_REQUIRED
+                                    )
+                            }
+                    )),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "502",
+                    description = "애플/구글 연결 해제 요청이 네트워크·서버 오류로 실패한 경우(재시도 가능)",
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = ErrorApiResponse.class),
                             examples = @ExampleObject(
-                                    name = "MEMBER_NICKNAME_DUPLICATE",
-                                    summary = "마스킹 닉네임 중복",
-                                    value = MemberSwaggerErrorExamples.NICKNAME_DUPLICATE
+                                    name = "AUTH_SOCIAL_UNLINK_FAILED",
+                                    summary = "소셜 연결 해제 실패",
+                                    value = MemberSwaggerErrorExamples.SOCIAL_UNLINK_FAILED
                             )
                     )),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -749,5 +777,10 @@ public interface MemberControllerDocs {
                     responseCode = "200",
                     description = "요청 성공")
     })
-    ApiResponse<Void> withdraw(AuthMember authMember, HttpServletRequest request, HttpServletResponse response);
+    ApiResponse<Void> withdraw(
+            AuthMember authMember,
+            MemberReqDTO.Withdraw withdrawRequest,
+            HttpServletRequest request,
+            HttpServletResponse response
+    );
 }

@@ -7,10 +7,12 @@ import com.example.plimap.domain.auth.dto.OAuthDTO;
 import com.example.plimap.domain.auth.dto.request.AuthReqDTO;
 import com.example.plimap.domain.auth.dto.response.AuthResponse;
 import com.example.plimap.domain.auth.entity.AuthMember;
+import com.example.plimap.domain.auth.enums.AuthProvider;
 import com.example.plimap.domain.auth.exception.AuthErrorCode;
 import com.example.plimap.domain.auth.exception.AuthException;
 import com.example.plimap.domain.auth.exception.SanctionedMemberAuthenticationException;
 import com.example.plimap.domain.auth.service.command.AppOAuthCommandService;
+import com.example.plimap.domain.auth.service.command.SocialAccountCommandService;
 import com.example.plimap.domain.member.entity.Member;
 import com.example.plimap.domain.member.enums.MemberStatus;
 import com.example.plimap.domain.member.exception.MemberErrorCode;
@@ -31,12 +33,12 @@ import org.springframework.stereotype.Service;
 @Service
 public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
 
-    private static final String GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
+    static final String GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
     // 구글 ID 토큰의 iss는 https://accounts.google.com / accounts.google.com 둘 다 유효하다.
-    private static final Set<String> GOOGLE_ISSUERS = Set.of(
+    static final Set<String> GOOGLE_ISSUERS = Set.of(
             "https://accounts.google.com", "accounts.google.com");
-    private static final String APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys";
-    private static final Set<String> APPLE_ISSUERS = Set.of("https://appleid.apple.com");
+    static final String APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys";
+    static final Set<String> APPLE_ISSUERS = Set.of("https://appleid.apple.com");
 
     private final CustomOAuthService customOAuthService;
     private final KakaoUserApiClient kakaoUserApiClient;
@@ -45,6 +47,7 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
     private final RefreshTokenService refreshTokenService;
     private final AppLoginNonceService appLoginNonceService;
     private final MemberRepository memberRepository;
+    private final SocialAccountCommandService socialAccountCommandService;
     private final String googleAppClientId;
     private final String appleAppClientId;
 
@@ -56,6 +59,7 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
             RefreshTokenService refreshTokenService,
             AppLoginNonceService appLoginNonceService,
             MemberRepository memberRepository,
+            SocialAccountCommandService socialAccountCommandService,
             @Value("${app-oauth.google.client-id}") String googleAppClientId,
             @Value("${app-oauth.apple.client-id}") String appleAppClientId
     ) {
@@ -66,6 +70,7 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
         this.refreshTokenService = refreshTokenService;
         this.appLoginNonceService = appLoginNonceService;
         this.memberRepository = memberRepository;
+        this.socialAccountCommandService = socialAccountCommandService;
         this.googleAppClientId = googleAppClientId;
         this.appleAppClientId = appleAppClientId;
     }
@@ -82,6 +87,13 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
             member = customOAuthService.resolveMember(request.provider(), dto);
         } catch (SanctionedMemberAuthenticationException exception) {
             return AuthResponse.AppLogin.sanctioned(exception);
+        }
+
+        // 탈퇴 시 애플/구글 연결을 끊을 수 있도록 refresh token을 받아 둔다(카카오는 어드민 키로 끊어 불필요).
+        if (request.provider() != AuthProvider.KAKAO
+                && request.authorizationCode() != null && !request.authorizationCode().isBlank()) {
+            socialAccountCommandService.saveRefreshTokenByCode(
+                    member.getId(), request.provider(), request.authorizationCode());
         }
 
         AuthMember authMember = new AuthMember(member);
@@ -122,8 +134,8 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
         return new AuthResponse.AppTokenReissue(newAccessToken, newRefreshToken);
     }
 
-    // Apple 로그인 시도 전에 앱이 미리 받아가는 1회용 nonce. Apple 인증 요청에 그대로 실어
-    // 보내면 ID 토큰의 nonce claim에 담겨 돌아오고, toAppleDTO()가 로그인 시점에 소비한다.
+    // Apple 로그인 시도 전에 앱이 미리 받아가는 1회용 nonce. 앱이 SHA-256(hex)으로 해시해서 Apple 인증
+    // 요청에 실어 보내면 ID 토큰의 nonce claim에 해시 값이 담겨 돌아오고, toAppleDTO()가 로그인 시점에 소비한다.
     @Override
     public AuthResponse.AppLoginNonce issueNonce() {
         return new AuthResponse.AppLoginNonce(appLoginNonceService.issue());
@@ -178,7 +190,7 @@ public class AppOAuthCommandServiceImpl implements AppOAuthCommandService {
     private AppleDTO toAppleDTO(String idToken) {
         Claims claims = idTokenVerifier.verify(APPLE_JWKS_URL, APPLE_ISSUERS, appleAppClientId, idToken);
         // 정상 서명된 ID 토큰이라도 탈취되면 만료 전까지 재전송(replay)될 수 있으므로, 로그인
-        // 시도마다 서버가 미리 발급한 1회용 nonce가 토큰에 그대로 담겨 왔는지 확인하고 소비한다.
+        // 시도마다 서버가 미리 발급한 1회용 nonce(의 SHA-256 해시)가 토큰에 담겨 왔는지 확인하고 소비한다.
         // 두 번째로 같은 토큰이 들어오면 nonce가 이미 소비돼 있어 거부된다.
         String nonce = claims.get("nonce", String.class);
         if (!appLoginNonceService.consume(nonce)) {

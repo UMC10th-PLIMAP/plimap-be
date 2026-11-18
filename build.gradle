@@ -4,6 +4,44 @@ plugins {
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
+def plimapAot = providers.gradleProperty('plimapAot').orElse('false').get()
+if (!(plimapAot in ['true', 'false'])) {
+    throw new GradleException('plimapAot must be true or false')
+}
+if (plimapAot == 'true') {
+    apply plugin: 'org.springframework.boot.aot'
+
+    tasks.named('processAot') {
+        def generation = new Properties()
+        file('scripts/spring-aot/generation.properties').withInputStream { generation.load(it) }
+        args '--spring.profiles.active=prod'
+        generation.each { key, value -> args "--${key}=${value}" }
+        environment 'GOOGLE_APPLICATION_CREDENTIALS', file('scripts/appcds/training-credentials.json').absolutePath
+        environment 'GOOGLE_CLOUD_PROJECT', 'plimap-aot-generation'
+    }
+
+    tasks.register('resolveAotDependencies') {
+        doLast {
+            ['compileClasspath', 'runtimeClasspath', 'aotCompileClasspath', 'aotRuntimeClasspath'].each {
+                configurations.getByName(it).resolve()
+            }
+        }
+    }
+
+    tasks.register('verifyAotArtifact') {
+        dependsOn tasks.named('bootJar')
+        doLast {
+            def initializer = 'BOOT-INF/classes/com/example/plimap/PlimapApplication__ApplicationContextInitializer.class'
+            if (zipTree(tasks.named('bootJar').get().archiveFile.get()).matching { include initializer }.isEmpty()) {
+                throw new GradleException('Generated prod AOT initializer is missing from bootJar')
+            }
+            def marker = layout.buildDirectory.file('spring-aot/profile').get().asFile
+            marker.parentFile.mkdirs()
+            marker.text = 'prod\n'
+        }
+    }
+}
+
 group = 'com.example'
 version = '0.0.1-SNAPSHOT'
 description = 'PLIMAP'

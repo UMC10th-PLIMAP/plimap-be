@@ -10,6 +10,7 @@ import java.util.Optional;
 public interface PlaceQueryService {
 
     PlaceResponse.PopularListResult getPopularPlaces(
+            Long memberId,
             PopularPlaceScope scope,
             double latitude,
             double longitude
