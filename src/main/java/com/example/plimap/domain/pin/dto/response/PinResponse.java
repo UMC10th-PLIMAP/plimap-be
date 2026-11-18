@@ -74,7 +74,8 @@ public class PinResponse {
             String introduction,
             List<String> tags,
             String staticCreatedAt,
-            Instant createdAt
+            Instant createdAt,
+            Boolean feedOpen
     ) {}
 
     @Builder
@@ -105,7 +106,8 @@ public class PinResponse {
             String albumImageUrl,
             String youtubeVideoId,
             Integer clipStartMs,
-            Boolean hasBookmarkedPlace
+            Boolean hasBookmarkedPlace,
+            Boolean feedOpen
     ) {}
 
     @Builder
