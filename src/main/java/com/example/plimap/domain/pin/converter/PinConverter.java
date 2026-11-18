@@ -93,6 +93,8 @@ public class PinConverter {
                 .tags(pin.getPinTagList().stream().map(pinTag -> pinTag.getTag().getName()).toList())
                 .staticCreatedAt(parseCreatedAt(pin.getCreatedAt(), Instant.now()))
                 .createdAt(pin.getCreatedAt())
+                .feedOpen(pin.isFeedPublic())
+                .feedOpen(pin.isFeedPublic())
                 .build();
     }
 
@@ -159,6 +161,7 @@ public class PinConverter {
                 .youtubeVideoId(pin.getPlaceTrack().getTrack().getProviderTrackId())
                 .clipStartMs(pin.getClipStartMs())
                 .hasBookmarkedPlace(hasBookmarkedPlace)
+                .feedOpen(pin.isFeedPublic())
                 .build();
     }
 
