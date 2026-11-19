@@ -55,17 +55,6 @@ Dev는 `dev.plimap.kr`, Prod는 `plimap.kr`에서 운영 중입니다.
 AppCDS 학습 격리, 실제 archive 사용 확인, ON/OFF 비교와 복구 방법은 [AppCDS 측정 준비](../scripts/gcp/APPCDS.md)를 참고합니다.
 후속 startup 검사 간격·Spring AOT 실험의 기준선, 설정 전환과 원복은 [순차 실험 절차](../scripts/gcp/STARTUP_EXPERIMENTS.md)를 참고합니다.
 
-### Java Base64 보안 완화 (CVE-2026-114938)
-
-2026-11-20 확인한 공식 Temurin Java 21 Jammy JDK/JRE 이미지의 최신 태그는 아직 `21.0.13+9`이며, 패치된 `21.0.13.1+2` 이미지는 확인되지 않았습니다. 따라서 현재 Dockerfile은 builder와 runtime-base에 `JDK_JAVA_OPTIONS=-XX:-UseBASE64Intrinsics`를 지정해 취약한 Base64 가속 경로를 비활성화합니다. AOT 생성, AppCDS 학습·검증, baseline과 최종 앱 실행에 동일하게 적용됩니다. Java 21과 기존 이미지 digest는 유지하며 이 조치는 버전 업그레이드를 대신하는 임시 완화입니다.
-
-- `JAVA_TOOL_OPTIONS`의 기존 진단 설정과 함께 사용할 수 있습니다. 배포 환경에서 `JDK_JAVA_OPTIONS`를 덮어쓰거나 Base64 가속을 다시 활성화하지 않습니다.
-- 이미 운영 중인 revision에는 소스 변경만으로 적용되지 않습니다. 이미지를 재빌드해 개발·운영의 새 revision으로 배포하고, 기존 취약 revision으로의 트래픽·태그 접근 경로를 정리해야 합니다. 현재 JVM 옵션은 `jcmd <pid> VM.flags -all`로 확인하거나 별도 검증 기동에서 `-XX:+PrintFlagsFinal`을 사용해 `UseBASE64Intrinsics = false`인지 확인합니다. JRE 이미지에는 `jcmd`가 없을 수 있습니다.
-- 패치가 포함된 Temurin `21.0.13.1+2` 이상 JDK/JRE 이미지가 제공되면 실제 버전을 확인해 `BUILD_IMAGE`와 `RUNTIME_IMAGE`의 digest를 갱신하고 archive를 재생성합니다. 새 이미지 검증·배포를 마친 뒤 임시 옵션을 제거합니다. 기존 digest를 유지한 `docker build --pull`만으로는 패치되지 않습니다.
-- Base64 디코딩 성능이 달라질 수 있으므로 완화 이전과 이후의 시작·성능 측정값은 같은 조건으로 취급하지 않습니다.
-
-공식 근거: [Temurin 패치 버전 및 임시 완화 안내](https://adoptium.net/news/2026/11/temurin-november-2026-cspu-java4shell), [OpenJDK 보안 공지](https://openjdk.org/groups/vulnerability/advisories/2026-11-17). 추적 이슈: [#374](https://github.com/UMC10th-PLIMAP/PLIMAP-BE/issues/374).
-
 ---
 
 ## local 환경
