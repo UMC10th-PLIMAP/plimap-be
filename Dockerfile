@@ -3,6 +3,9 @@ ARG RUNTIME_IMAGE=eclipse-temurin:21-jre-jammy@sha256:1eac8b8fee11ca7d6725a48bc5
 
 FROM ${BUILD_IMAGE} AS builder
 
+# shortcut: CVE-2026-114938 mitigation until patched Temurin JDK/JRE digests are available.
+ENV JDK_JAVA_OPTIONS="-XX:-UseBASE64Intrinsics"
+
 WORKDIR /workspace
 
 COPY gradlew gradlew.bat build.gradle settings.gradle ./
@@ -20,6 +23,8 @@ RUN ./gradlew -PplimapAot=true resolveAotDependencies --no-daemon
 RUN --network=none ./gradlew -PplimapAot=true verifyAotArtifact --offline --no-daemon
 
 FROM ${RUNTIME_IMAGE} AS runtime-base
+
+ENV JDK_JAVA_OPTIONS="-XX:-UseBASE64Intrinsics"
 
 RUN useradd --system --uid 10001 --user-group --create-home spring \
     && install -d -o spring -g spring /app
