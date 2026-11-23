@@ -749,4 +749,53 @@ public interface PinControllerDocs {
             @AuthenticationPrincipal AuthMember currentMember,
             @PathVariable Long placeId
     );
+
+    @Operation(
+            summary = "최신 등록 핀 목록 조회",
+            description = "최근 등록된 핀 목록을 조회한다. (Figma 기준 화면: 홈화면 확정 (11.08))"
+    )
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "401",
+            description = "인증 정보가 없거나 유효하지 않은 경우",
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = ErrorApiResponse.class),
+                    examples = @ExampleObject(
+                            name = "COMMON_401_UNAUTHORIZED",
+                            summary = "인증 필요",
+                            value = CommonSwaggerErrorExamples.UNAUTHORIZED
+                    )
+            ))
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "400",
+            description = "페이지 크기 검증에 실패했거나 커서가 올바르지 않은 경우",
+            content = @Content(
+                    mediaType = "application/json",
+                    schema = @Schema(implementation = ErrorApiResponse.class),
+                    examples = {
+                            @ExampleObject(
+                                    name = "COMMON_400_VALIDATION_FAILED",
+                                    summary = "페이지 크기 검증 실패",
+                                    value = PinSwaggerErrorExamples.PAGE_SIZE_VALIDATION_FAILED
+                            ),
+                            @ExampleObject(
+                                    name = "COMMON_400_INVALID_CURSOR",
+                                    summary = "잘못된 커서",
+                                    value = CommonSwaggerErrorExamples.INVALID_CURSOR
+                            )
+                    }
+            ))
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(
+            responseCode = "200",
+            description = "요청 성공")
+    public ResponseEntity<ApiResponse<Pagination<PinResponse.Feed>>> getHomeRecentPinList(
+            @AuthenticationPrincipal AuthMember currentMember,
+            @RequestParam(required = false, defaultValue = "10")
+            @Min(value = 1, message = "페이지 크기는 1 이상이어야 합니다.")
+            @Max(value = 50, message = "페이지 크기는 50 이하여야 합니다.")
+            Integer pageSize,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(required = false) Boolean within500m,
+            @Valid @ModelAttribute PinRequest.UserLocation request
+    );
 }

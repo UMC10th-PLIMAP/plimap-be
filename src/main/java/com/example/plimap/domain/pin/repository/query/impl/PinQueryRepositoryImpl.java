@@ -27,6 +27,8 @@ import com.example.plimap.global.external.storage.ProfileImageStorage;
 import com.querydsl.core.types.OrderSpecifier;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
+import com.querydsl.core.types.dsl.Expressions;
+import com.querydsl.core.types.dsl.NumberExpression;
 import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
@@ -151,7 +153,7 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
                  )
         """;
 
-    private static final String FEED_QUERY =  """
+    private static final String FEED_QUERY1 =  """
         SELECT
             p.id,
             pl.id,
@@ -179,13 +181,17 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
         JOIN track t ON t.id = pt.track_id
         JOIN place pl ON pl.id = pt.place_id
         WHERE p.id IN (:pinIds)
-          AND p.member_id = :memberId
-          AND p.deleted_at IS NULL
-          AND pl.deleted_at IS NULL
-          AND pt.deleted_at IS NULL
-          AND p.is_feed_public = true
-          AND p.report_count < %d
-        ORDER BY p.created_at DESC, p.id DESC
+        """;
+
+    private static final String FEED_QUERY_MEMBER_FILTER = "AND p.member_id = :memberId";
+
+    private static final String FEED_QUERY2 = """
+      AND p.deleted_at IS NULL
+      AND pl.deleted_at IS NULL
+      AND pt.deleted_at IS NULL
+      AND p.is_feed_public = true
+      AND p.report_count < %d
+    ORDER BY p.created_at DESC, p.id DESC
     """;
 
     private final EntityManager entityManager;
@@ -261,6 +267,7 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
             return emptyPagination(pageSize);
         }
 
+        String FEED_QUERY = FEED_QUERY1 + FEED_QUERY_MEMBER_FILTER + FEED_QUERY2;
         @SuppressWarnings("unchecked")
         List<Object[]> rows = entityManager.createNativeQuery(FEED_QUERY.formatted(REPORT_HIDE_THRESHOLD))
                 .setParameter("userLng", request.userLongitude())
@@ -269,19 +276,7 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
                 .setParameter("pinIds", pinIds)
                 .getResultList();
 
-        List<PinResponse.Feed> data = new ArrayList<>(rows.stream()
-                .map(row -> PinResponse.Feed.builder()
-                        .pinId(((Number) row[0]).longValue())
-                        .placeId(((Number) row[1]).longValue())
-                        .albumImageUrl((String) row[2])
-                        .latitude(((Number) row[3]).doubleValue())
-                        .longitude(((Number) row[4]).doubleValue())
-                        .placeName((String) row[5])
-                        .distanceFromUser(((Number) row[6]).intValue())
-                        .pinCount(((Number) row[7]).longValue())
-                        .createdAt((Instant) row[8])
-                        .build())
-                .toList());
+        List<PinResponse.Feed> data = getFeeds(rows);
 
         boolean hasNext = data.size() > pageSize;
 
@@ -305,6 +300,23 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
                 : null;
 
         return PinConverter.toPagination(data, nextCursor, hasNext, pageSize);
+    }
+
+    private static List<PinResponse.Feed> getFeeds(List<Object[]> rows) {
+        List<PinResponse.Feed> data = new ArrayList<>(rows.stream()
+                .map(row -> PinResponse.Feed.builder()
+                        .pinId(((Number) row[0]).longValue())
+                        .placeId(((Number) row[1]).longValue())
+                        .albumImageUrl((String) row[2])
+                        .latitude(((Number) row[3]).doubleValue())
+                        .longitude(((Number) row[4]).doubleValue())
+                        .placeName((String) row[5])
+                        .distanceFromUser(((Number) row[6]).intValue())
+                        .pinCount(((Number) row[7]).longValue())
+                        .createdAt((Instant) row[8])
+                        .build())
+                .toList());
+        return data;
     }
 
     @Override
@@ -708,6 +720,81 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
         ).orElse(0L);
 
         return new PageImpl<>(content, pageable, total);
+    }
+
+    @Override
+    public Pagination<PinResponse.Feed> getHomeRecentPinList(Long memberId, String cursor, Integer pageSize, PinRequest.UserLocation request, Boolean within500m) {
+        CursorInfo cursorInfo = parseCursor(cursor, null);
+        NumberExpression<Double> distanceExpression = Expressions.numberTemplate(
+                Double.class,
+                "ST_Distance({0}, ST_Point({1}, {2}))",
+                place.location,
+                request.userLongitude(),
+                request.userLatitude()
+        );
+
+        List<Long> pinIds = queryFactory
+                .select(pin.id)
+                .from(pin)
+                .join(pin.member, member)
+                .join(place).on(pin.place.eq(place))
+                .leftJoin(report)
+                .on(
+                        report.reporter.id.eq(memberId),
+                        report.reportedPin.eq(pin)
+                                .or(report.reportedMember.eq(pin.member))
+                )
+                .where(
+                        cursorCondition(cursorInfo, null),
+                        pin.deletedAt.isNull(),
+                        pin.isFeedPublic.eq(true),
+                        pin.reportCount.lt(REPORT_HIDE_THRESHOLD),
+                        report.id.isNull(),
+
+                        Boolean.TRUE.equals(within500m)
+                                ? distanceExpression.loe(500)
+                                : null
+                )
+                .orderBy(pin.createdAt.desc(), pin.id.desc())
+                .limit(pageSize + 1)
+                .fetch();
+
+        if (pinIds.isEmpty()) {
+            return emptyPagination(pageSize);
+        }
+
+        String FEED_QUERY = FEED_QUERY1  + FEED_QUERY2;
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = entityManager.createNativeQuery(FEED_QUERY.formatted(REPORT_HIDE_THRESHOLD))
+                .setParameter("userLng", request.userLongitude())
+                .setParameter("userLat", request.userLatitude())
+                .setParameter("pinIds", pinIds)
+                .getResultList();
+
+        List<PinResponse.Feed> data = getFeeds(rows);
+
+        boolean hasNext = data.size() > pageSize;
+
+        if (hasNext) {
+            data.remove(pageSize.intValue());
+        }
+
+        if (data.isEmpty()) {
+            return PinConverter.toPagination(
+                    data,
+                    null,
+                    false,
+                    pageSize
+            );
+        }
+
+
+        PinResponse.Feed last = data.getLast();
+        String nextCursor = hasNext
+                ? last.createdAt() + "/" + last.pinId()
+                : null;
+
+        return PinConverter.toPagination(data, nextCursor, hasNext, pageSize);
     }
 
     private BooleanExpression reportFilterCondition(PinReportFilter filter) {
