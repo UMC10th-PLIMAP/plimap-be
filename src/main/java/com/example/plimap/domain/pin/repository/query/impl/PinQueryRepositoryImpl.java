@@ -748,6 +748,7 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
                         cursorCondition(cursorInfo, null),
                         pin.deletedAt.isNull(),
                         pin.isFeedPublic.eq(true),
+                        place.deletedAt.isNull(),
                         pin.reportCount.lt(REPORT_HIDE_THRESHOLD),
                         report.id.isNull(),
 
