@@ -3,6 +3,18 @@ ARG RUNTIME_IMAGE=eclipse-temurin:21-jre-jammy@sha256:1eac8b8fee11ca7d6725a48bc5
 
 FROM ${BUILD_IMAGE} AS builder
 
+# Official Jammy image tags lag the security release; pin the patched Linux x64 package.
+ENV JAVA_VERSION=jdk-21.0.13.1+2
+RUN test "$(dpkg --print-architecture)" = amd64 \
+    && curl --fail --location --retry 3 --output /tmp/openjdk.tar.gz \
+    'https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13.1%2B2/OpenJDK21U-jdk_x64_linux_hotspot_21.0.13.1_2.tar.gz' \
+    && echo 'bb8a93f9ae6e7a693b2b721e85dbeff26ae1a77447985a8d7afcdd9c7cf6222e  /tmp/openjdk.tar.gz' | sha256sum --check - \
+    && rm -rf /opt/java/openjdk \
+    && mkdir -p /opt/java/openjdk \
+    && tar -xzf /tmp/openjdk.tar.gz -C /opt/java/openjdk --strip-components=1 \
+    && rm /tmp/openjdk.tar.gz \
+    && java -version
+
 WORKDIR /workspace
 
 COPY gradlew gradlew.bat build.gradle settings.gradle ./
@@ -20,6 +32,17 @@ RUN ./gradlew -PplimapAot=true resolveAotDependencies --no-daemon
 RUN --network=none ./gradlew -PplimapAot=true verifyAotArtifact --offline --no-daemon
 
 FROM ${RUNTIME_IMAGE} AS runtime-base
+
+ENV JAVA_VERSION=jdk-21.0.13.1+2
+RUN test "$(dpkg --print-architecture)" = amd64 \
+    && curl --fail --location --retry 3 --output /tmp/openjdk.tar.gz \
+    'https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13.1%2B2/OpenJDK21U-jre_x64_linux_hotspot_21.0.13.1_2.tar.gz' \
+    && echo '18f44fab9065217f3ba61d0eef8a7b5f3c3713aa7293001b0d4ac10ede3850f0  /tmp/openjdk.tar.gz' | sha256sum --check - \
+    && rm -rf /opt/java/openjdk \
+    && mkdir -p /opt/java/openjdk \
+    && tar -xzf /tmp/openjdk.tar.gz -C /opt/java/openjdk --strip-components=1 \
+    && rm /tmp/openjdk.tar.gz \
+    && java -version
 
 RUN useradd --system --uid 10001 --user-group --create-home spring \
     && install -d -o spring -g spring /app

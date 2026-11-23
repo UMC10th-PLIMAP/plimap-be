@@ -569,7 +569,8 @@ class PinControllerTest {
                         "https://example.com/album.jpg",
                         "dQw4w9WgXcQ",
                         30000,
-                        false
+                        false,
+                        true
                 )
         );
 
