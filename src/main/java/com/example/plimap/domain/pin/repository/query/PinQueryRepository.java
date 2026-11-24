@@ -45,4 +45,6 @@ public interface PinQueryRepository{
     long countPinsByMemberId(Long memberId);
 
     Page<ReportedPinInfo> findReportedPins(PinReportFilter filter, Pageable pageable);
+
+    Pagination<PinResponse.Feed> getHomeRecentPinList(Long memberId, String cursor, Integer pageSize, PinRequest.UserLocation request, Boolean within500m);
 }

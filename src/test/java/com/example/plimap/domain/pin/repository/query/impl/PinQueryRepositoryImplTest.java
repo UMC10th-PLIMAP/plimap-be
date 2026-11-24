@@ -917,6 +917,34 @@ class PinQueryRepositoryImplTest {
                 .containsExactly(pinA.getId());
     }
 
+    @Test
+    void 최신_등록_핀_목록을_조회한다() {
+        Pagination<PinResponse.Feed> response =
+                pinQueryRepository.getHomeRecentPinList(member1.getId(), null, 5, request, false);
+
+        assertThat(response.data())
+                .extracting(PinResponse.Feed::pinId)
+                .contains(pin5.getId());
+
+        assertThat(response.data().size()).isEqualTo(5);
+    }
+
+    @Test
+    void within500m_값이_true일시_500m_이내의_최신_등록_핀만_조회한다() {
+        Pagination<PinResponse.Feed> response =
+                pinQueryRepository.getHomeRecentPinList(member1.getId(), null, 5, request, true);
+
+        assertThat(response.data())
+                .extracting(PinResponse.Feed::pinId)
+                .contains(pin1.getId());
+
+        assertThat(response.data())
+                .extracting(PinResponse.Feed::pinId)
+                .contains(pin2.getId());
+
+        assertThat(response.data().size()).isEqualTo(3);
+    }
+
     private Member createMember(String name, String nickname) {
         return Member.builder()
                 .name(name)

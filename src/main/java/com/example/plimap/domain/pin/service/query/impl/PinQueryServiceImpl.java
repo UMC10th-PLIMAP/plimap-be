@@ -217,4 +217,9 @@ public class PinQueryServiceImpl implements PinQueryService {
         return placeAccessToken.memberId().equals(memberId)
                 && placeAccessToken.placeId().equals(placeId);
     }
+
+    @Override
+    public Pagination<PinResponse.Feed> getHomeRecentPinList(Long memberId, String cursor, Integer pageSize, PinRequest.UserLocation request, Boolean within500m) {
+        return pinQueryRepository.getHomeRecentPinList(memberId, cursor, pageSize, request, within500m);
+    }
 }

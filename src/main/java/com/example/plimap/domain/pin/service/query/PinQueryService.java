@@ -59,4 +59,6 @@ public interface PinQueryService {
     Page<ReportedPinInfo> findReportedPins(PinReportFilter filter, Pageable pageable);
 
     boolean hasValidFeedToken(String token, Long memberId, Long placeId);
+
+    Pagination<PinResponse.Feed> getHomeRecentPinList(Long memberId, String cursor, Integer pageSize, PinRequest.UserLocation request, Boolean within500m);
 }

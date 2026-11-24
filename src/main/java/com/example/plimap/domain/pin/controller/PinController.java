@@ -217,4 +217,26 @@ public class PinController implements PinControllerDocs {
                 .status(HttpStatus.OK)
                 .body(ApiResponse.success(PinSuccessCode.FRIEND_FEED_TOKEN_REQUEST_SUCCESS, response));
     }
+
+    @GetMapping("/pins/recent")
+    public ResponseEntity<ApiResponse<Pagination<PinResponse.Feed>>> getHomeRecentPinList(
+            @AuthenticationPrincipal AuthMember currentMember,
+            @RequestParam(required = false, defaultValue = "10")
+            @Min(value = 1, message = "페이지 크기는 1 이상이어야 합니다.")
+            @Max(value = 50, message = "페이지 크기는 50 이하여야 합니다.")
+            Integer pageSize,
+            @RequestParam(required = false) String cursor,
+            @RequestParam(required = false) Boolean within500m,
+            @Valid @ModelAttribute PinRequest.UserLocation request
+    ) {
+        Pagination<PinResponse.Feed> response = pinQueryService.getHomeRecentPinList(
+                currentMember.getMember().getId(),
+                cursor,
+                pageSize,
+                request,
+                within500m);
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(ApiResponse.success(PinSuccessCode.HOME_RECENT_PIN_LIST_SEARCH_SUCCESS, response));
+    }
 }
