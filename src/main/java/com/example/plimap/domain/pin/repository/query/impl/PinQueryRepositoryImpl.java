@@ -35,7 +35,11 @@ import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
+import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -162,12 +166,15 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
             ST_X(pl.location::geometry) AS longitude,
             pl.name,
             CAST(
-                ST_DistanceSphere(
-                    pl.location::geometry,
-                    ST_SetSRID(ST_Point(:userLng, :userLat), 4326)
-                ) AS INTEGER
-            ) AS distance_from_user,
-            (
+               ST_Distance(
+                   pl.location,
+                   ST_SetSRID(
+                       ST_MakePoint(:userLng, :userLat),
+                       4326
+                   )::geography
+               ) AS INTEGER
+           ) AS distance_from_user,
+           (
                 SELECT COUNT(*)
                 FROM pin p2
                 JOIN place_track pt2 ON pt2.id = p2.place_track_id
@@ -725,41 +732,78 @@ public class PinQueryRepositoryImpl implements PinQueryRepository {
     @Override
     public Pagination<PinResponse.Feed> getHomeRecentPinList(Long memberId, String cursor, Integer pageSize, PinRequest.UserLocation request, Boolean within500m) {
         CursorInfo cursorInfo = parseCursor(cursor, null);
-        NumberExpression<Double> distanceExpression = Expressions.numberTemplate(
-                Double.class,
-                "ST_Distance({0}, ST_Point({1}, {2}))",
-                place.location,
-                request.userLongitude(),
-                request.userLatitude()
-        );
+        StringBuilder sql = new StringBuilder("""
+        SELECT p.id
+        FROM pin p
+        JOIN member m ON m.id = p.member_id
+        JOIN place_track pt ON pt.id = p.place_track_id
+        JOIN place pl ON pl.id = pt.place_id
+        LEFT JOIN report r
+            ON r.reporter_member_id = :memberId
+            AND (
+                r.reported_pin_id = p.id
+                OR r.reported_member_id = p.member_id
+            )
+        WHERE p.deleted_at IS NULL
+          AND p.is_feed_public = TRUE
+          AND m.deleted_at IS NULL
+          AND pl.deleted_at IS NULL
+          AND p.report_count < :reportHideThreshold
+          AND r.id IS NULL
+        """);
 
-        List<Long> pinIds = queryFactory
-                .select(pin.id)
-                .from(pin)
-                .join(pin.member, member)
-                .join(place).on(pin.place.eq(place))
-                .leftJoin(report)
-                .on(
-                        report.reporter.id.eq(memberId),
-                        report.reportedPin.eq(pin)
-                                .or(report.reportedMember.eq(pin.member))
-                )
-                .where(
-                        cursorCondition(cursorInfo, null),
-                        pin.deletedAt.isNull(),
-                        pin.isFeedPublic.eq(true),
-                        member.deletedAt.isNull(),
-                        place.deletedAt.isNull(),
-                        pin.reportCount.lt(REPORT_HIDE_THRESHOLD),
-                        report.id.isNull(),
+        boolean hasCursor = cursorInfo != null
+                && cursorInfo.createdAt() != null
+                && cursorInfo.pinId() != null;
 
-                        Boolean.TRUE.equals(within500m)
-                                ? distanceExpression.loe(500)
-                                : null
-                )
-                .orderBy(pin.createdAt.desc(), pin.id.desc())
-                .limit(pageSize + 1)
-                .fetch();
+        if (hasCursor) {
+            sql.append("""
+        AND (
+            p.created_at < :cursorCreatedAt
+            OR (
+                p.created_at = :cursorCreatedAt
+                AND p.id < :cursorId
+            )
+        )
+        """);
+        }
+
+        if (Boolean.TRUE.equals(within500m)) {
+            sql.append("""
+            AND ST_DWithin(
+                pl.location,
+                ST_SetSRID(
+                    ST_MakePoint(:userLng, :userLat),
+                    4326
+                )::geography,
+                500
+            )
+            """);
+        }
+
+        sql.append("""
+        ORDER BY p.created_at DESC, p.id DESC
+        """);
+
+        Query query = entityManager.createNativeQuery(sql.toString())
+                .setParameter("memberId", memberId)
+                .setParameter("reportHideThreshold", REPORT_HIDE_THRESHOLD)
+                .setMaxResults(pageSize + 1);
+
+        if (hasCursor) {
+            query.setParameter("cursorCreatedAt", cursorInfo.createdAt());
+            query.setParameter("cursorId", cursorInfo.pinId());
+        }
+
+        if (Boolean.TRUE.equals(within500m)) {
+            query.setParameter("userLng", request.userLongitude());
+            query.setParameter("userLat", request.userLatitude());
+        }
+
+        List<Long> pinIds = ((List<?>) query.getResultList())
+                .stream()
+                .map(id -> ((Number) id).longValue())
+                .toList();
 
         if (pinIds.isEmpty()) {
             return emptyPagination(pageSize);
