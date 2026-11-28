@@ -11,6 +11,7 @@ import com.example.plimap.domain.track.repository.PlaybackFailureCacheRepository
 import com.example.plimap.domain.track.repository.SelectedTrackCacheRepository;
 import com.example.plimap.domain.track.repository.TrackMetadataCacheRepository;
 import com.example.plimap.domain.track.service.command.TrackPlaybackPreparationService;
+import com.example.plimap.domain.track.service.command.YoutubeCandidateValidator;
 import com.example.plimap.global.external.youtube.YoutubeClientException;
 import com.example.plimap.global.external.youtube.YoutubeSearchClient;
 import com.example.plimap.global.external.youtube.dto.YoutubeSearchResponse;
@@ -49,8 +50,7 @@ public class TrackPlaybackPreparationServiceImpl
         }
 
         TrackMetadataCache metadata = findMetadata(request.itunesTrackId());
-        YoutubeSearchResponse youtubeResponse = searchYoutube(metadata);
-        String youtubeVideoId = selectVideoId(youtubeResponse);
+        String youtubeVideoId = findVideoId(metadata);
         SelectedTrackCache selectedTrack = SelectedTrackCache.from(metadata, youtubeVideoId);
         saveSelection(selectedTrack);
 
@@ -84,27 +84,34 @@ public class TrackPlaybackPreparationServiceImpl
         }
     }
 
-    private YoutubeSearchResponse searchYoutube(TrackMetadataCache metadata) {
+    private String findVideoId(TrackMetadataCache metadata) {
+        String query = metadata.artistName() + QUERY_SEPARATOR + metadata.title();
+        Optional<String> videoId = selectVideoId(searchYoutube(query), metadata);
+        if (videoId.isPresent()) {
+            return videoId.get();
+        }
+        String genre = metadata.primaryGenreName();
+        if (genre == null || genre.isBlank()) {
+            throw new TrackException(TrackErrorCode.YOUTUBE_MATCH_NOT_FOUND);
+        }
+        return selectVideoId(searchYoutube(query + QUERY_SEPARATOR + genre.strip()), metadata)
+                .orElseThrow(() -> new TrackException(TrackErrorCode.YOUTUBE_MATCH_NOT_FOUND));
+    }
+
+    private YoutubeSearchResponse searchYoutube(String query) {
         try {
-            String query = metadata.artistName() + QUERY_SEPARATOR + metadata.title();
             return youtubeSearchClient.search(query, MAX_RESULTS);
         } catch (YoutubeClientException exception) {
             throw new TrackException(TrackErrorCode.YOUTUBE_EXTERNAL_API_ERROR, exception);
         }
     }
 
-    private String selectVideoId(YoutubeSearchResponse response) {
-        if (response.items().isEmpty()) {
-            throw new TrackException(TrackErrorCode.YOUTUBE_MATCH_NOT_FOUND);
-        }
+    private Optional<String> selectVideoId(YoutubeSearchResponse response, TrackMetadataCache metadata) {
         return response.items().stream()
+                .filter(candidate -> YoutubeCandidateValidator.matches(metadata, candidate))
                 .map(YoutubeSearchResponse.Item::id)
-                .filter(Objects::nonNull)
                 .map(YoutubeSearchResponse.Id::videoId)
-                .filter(Objects::nonNull)
-                .filter(videoId -> !videoId.isBlank())
-                .findFirst()
-                .orElseThrow(() -> new TrackException(TrackErrorCode.YOUTUBE_MATCH_NOT_FOUND));
+                .findFirst();
     }
 
     private void saveSelection(SelectedTrackCache selectedTrack) {

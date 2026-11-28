@@ -20,6 +20,37 @@ import tools.jackson.core.JacksonException;
 
 class RedisTrackMetadataCacheRepositoryTest {
 
+    @Test
+    void 기존_JSON에_장르가_없어도_메타데이터를_읽는다() {
+        // given
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get(KEY)).thenReturn("""
+                {"itunesTrackId":123,"title":"Song","artistName":"Artist",
+                 "albumTitle":"Album","albumImageUrl":null,"previewUrl":null,"durationMs":1000}
+                """);
+        // when
+        TrackMetadataCache result = repository.findByItunesTrackId(123L).orElseThrow();
+        // then
+        assertThat(result.title()).isEqualTo("Song");
+        assertThat(result.primaryGenreName()).isNull();
+    }
+
+    @Test
+    void 장르를_포함한_메타데이터가_JSON_왕복_변환에서_유지된다() {
+        // given
+        TrackMetadataCache metadata = new TrackMetadataCache(
+                123L, "Song", "Artist", "Album", null, null, 1000, "Electronica"
+        );
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        ArgumentCaptor<String> valueCaptor = ArgumentCaptor.forClass(String.class);
+        // when
+        repository.save(metadata);
+        // then
+        verify(valueOperations).set(org.mockito.ArgumentMatchers.eq(KEY), valueCaptor.capture(),
+                org.mockito.ArgumentMatchers.eq(Duration.ofHours(24)));
+        assertThat(objectMapper.readValue(valueCaptor.getValue(), TrackMetadataCache.class)).isEqualTo(metadata);
+    }
+
     private static final String KEY = "track:metadata:123";
 
     private final StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);

@@ -31,10 +31,42 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.RedisConnectionFailureException;
 
 class TrackQueryServiceImplTest {
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void 장르는_검색과_메타데이터_캐시에_보존하고_프론트_응답에는_추가하지_않는다(boolean cached) {
+        // given
+        ItunesSearchResponse.Item original = itunesResponse().results().getFirst();
+        ItunesSearchResponse response = new ItunesSearchResponse(1, List.of(new ItunesSearchResponse.Item(
+                original.trackId(), original.trackName(), original.artistName(), original.collectionName(),
+                original.artworkUrl100(), original.previewUrl(), original.trackTimeMillis(), "Pop"
+        )));
+        TrackSearchCache cache = TrackSearchCache.from(response);
+        if (cached) {
+            when(trackSearchCacheRepository.find(KEYWORD, LIMIT)).thenReturn(Optional.of(cache));
+        } else {
+            when(itunesSearchClient.search(KEYWORD, LIMIT)).thenReturn(response);
+        }
+        // when
+        TrackResponse.TrackSearchResult result = trackQueryService.searchTracks(request());
+        // then
+        assertThat(cache.tracks().getFirst().primaryGenreName()).isEqualTo("Pop");
+        verify(trackMetadataCacheRepository).save(cache.tracks().getFirst());
+        assertThat(result).isEqualTo(searchResult());
+        assertThat(new tools.jackson.databind.ObjectMapper().writeValueAsString(result))
+                .doesNotContain("primaryGenreName");
+        if (cached) {
+            verifyNoInteractions(itunesSearchClient);
+        } else {
+            verify(trackSearchCacheRepository).save(KEYWORD, LIMIT, cache);
+        }
+    }
 
     private static final String KEYWORD = "아이유 밤편지";
     private static final int LIMIT = 20;

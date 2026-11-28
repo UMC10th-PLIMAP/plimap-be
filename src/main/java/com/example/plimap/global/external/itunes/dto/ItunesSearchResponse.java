@@ -18,7 +18,15 @@ public record ItunesSearchResponse(
             String collectionName,
             String artworkUrl100,
             String previewUrl,
-            Integer trackTimeMillis
+            Integer trackTimeMillis,
+            String primaryGenreName
     ) {
+        public Item(
+                Long trackId, String trackName, String artistName, String collectionName,
+                String artworkUrl100, String previewUrl, Integer trackTimeMillis
+        ) {
+            this(trackId, trackName, artistName, collectionName, artworkUrl100,
+                    previewUrl, trackTimeMillis, null);
+        }
     }
 }

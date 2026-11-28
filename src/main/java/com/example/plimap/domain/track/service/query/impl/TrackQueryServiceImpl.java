@@ -55,7 +55,7 @@ public class TrackQueryServiceImpl implements TrackQueryService {
         }
         TrackResponse.TrackSearchResult result =
                 TrackResponse.TrackSearchResult.from(itunesResponse);
-        TrackSearchCache searchCache = TrackSearchCache.from(result);
+        TrackSearchCache searchCache = TrackSearchCache.from(itunesResponse);
 
         saveMetadata(searchCache);
         saveSearchResult(request, searchCache);
