@@ -416,4 +416,48 @@ class TrackPlaybackPreparationServiceImplTest {
         verifyNoMoreInteractions(youtubeSearchClient);
         verify(selectedTrackCacheRepository).save(selectedTrack());
     }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Instrumental", "INST", "Cover", "Remix", "Sped up", "Live", "Live Clip"})
+    void 제목_뒤_다른_버전을_제외하고_다음_후보를_선택한다(String version) {
+        // given
+        givenGenre("Pop");
+        when(youtubeSearchClient.search(QUERY, 5)).thenReturn(new YoutubeSearchResponse(List.of(
+                candidate("wrong-version", QUERY + " " + version),
+                candidate("abcdefghijk", QUERY)
+        )));
+        // when
+        TrackResponse.PlaybackPreparationResult result = service.prepare(request());
+        // then
+        assertThat(result.youtubeVideoId()).isEqualTo("abcdefghijk");
+        verify(youtubeSearchClient).search(QUERY, 5);
+        verifyNoMoreInteractions(youtubeSearchClient);
+        verify(selectedTrackCacheRepository).save(selectedTrack());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void 제목_뒤_다른_버전으로_모두_탈락하면_Fallback에도_동일하게_검증한다(boolean fallbackSuccess) {
+        // given
+        givenGenre("Pop");
+        when(youtubeSearchClient.search(QUERY, 5)).thenReturn(new YoutubeSearchResponse(List.of(
+                candidate("live-video", QUERY + " Live Clip"),
+                candidate("cover-video", QUERY + " Cover")
+        )));
+        when(youtubeSearchClient.search(QUERY + " Pop", 5)).thenReturn(new YoutubeSearchResponse(
+                fallbackSuccess ? List.of(candidate("remix", QUERY + " Remix"), candidate("abcdefghijk", QUERY))
+                        : List.of(candidate("remix", QUERY + " Remix"))
+        ));
+        // when, then
+        if (fallbackSuccess) {
+            assertThat(service.prepare(request()).youtubeVideoId()).isEqualTo("abcdefghijk");
+            verify(selectedTrackCacheRepository).save(selectedTrack());
+        } else {
+            assertTrackError(() -> service.prepare(request()), TrackErrorCode.YOUTUBE_MATCH_NOT_FOUND);
+            verifyUnchangedCaches();
+        }
+        verify(youtubeSearchClient).search(QUERY, 5);
+        verify(youtubeSearchClient).search(QUERY + " Pop", 5);
+        verifyNoMoreInteractions(youtubeSearchClient);
+    }
 }

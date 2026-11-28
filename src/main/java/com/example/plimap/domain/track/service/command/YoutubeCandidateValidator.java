@@ -62,8 +62,21 @@ public final class YoutubeCandidateValidator {
     }
 
     private static Set<String> findVersions(String title, String protectedTitle) {
+        Set<String> keywords = findKeywords(title, VERSION, protectedTitle);
+        if (protectedTitle != null) {
+            int titleEnd = title.indexOf(protectedTitle) + protectedTitle.length();
+            // 문자열을 자르지 않아 제목 끝과 키워드 사이의 원래 단어 경계를 유지한다.
+            Matcher suffixVersions = VERSION.matcher(title);
+            while (suffixVersions.find()) {
+                if (suffixVersions.start() >= titleEnd
+                        && !overlapsTitle(title, protectedTitle,
+                                suffixVersions.start(), suffixVersions.end())) {
+                    keywords.add(suffixVersions.group());
+                }
+            }
+        }
         Set<String> versions = new HashSet<>();
-        for (String version : findKeywords(title, VERSION, protectedTitle)) {
+        for (String version : keywords) {
             versions.add(switch (version) {
                 case "inst" -> "instrumental";
                 case "live clip" -> "live";

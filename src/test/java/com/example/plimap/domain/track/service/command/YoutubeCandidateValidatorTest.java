@@ -52,10 +52,10 @@ class YoutubeCandidateValidatorTest {
                 Arguments.of("Song", "Song (Cover2)", true),
                 Arguments.of("Song", "Song (Cover\u0301)", true),
                 Arguments.of("Song", "Song (한Cover)", true),
-                Arguments.of("Song", "Song Cover", true),
-                Arguments.of("Song", "Song-Remix", true),
-                Arguments.of("Song", "Song -Remix", true),
-                Arguments.of("Song", "Song- Remix", true),
+                Arguments.of("Song", "Song Cover", false),
+                Arguments.of("Song", "Song-Remix", false),
+                Arguments.of("Song", "Song -Remix", false),
+                Arguments.of("Song", "Song- Remix", false),
                 Arguments.of("Song", "Song (Live Acoustic Slowed Karaoke)", false),
                 Arguments.of("Song", "Song (Classroom Instruments Acoustic Slowed Karaoke)", true),
                 Arguments.of("Song (Remix)", "Artist - Song (Remix)", true),
@@ -127,10 +127,10 @@ class YoutubeCandidateValidatorTest {
                 Arguments.of("Song", "Song (Live한)", true),
                 Arguments.of("Song", "Song (한Live)", true),
                 Arguments.of("Song", "Song (Live\u0301)", true),
-                Arguments.of("Song", "Song Live Clip", true),
-                Arguments.of("Song", "Song-Live Clip", true),
-                Arguments.of("Song", "Song- Live Clip", true),
-                Arguments.of("Song", "Song -Live Clip", true)
+                Arguments.of("Song", "Song Live Clip", false),
+                Arguments.of("Song", "Song-Live Clip", false),
+                Arguments.of("Song", "Song- Live Clip", false),
+                Arguments.of("Song", "Song -Live Clip", false)
         );
     }
 
@@ -197,6 +197,73 @@ class YoutubeCandidateValidatorTest {
 
     private static TrackMetadataCache metadata(String title, String artist) {
         return new TrackMetadataCache(1L, title, artist, "Album", null, null, 1000, "Pop");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Instrumental", "INST", "Cover", "Remix", "Sped up", "Live", "Live Clip"})
+    void 제목_뒤_모든_버전을_검사하고_직접_선택한_동일_버전은_허용한다(String version) {
+        // given
+        String selectedVersionTitle = "Song (" + version + ")";
+        // when, then
+        assertThat(YoutubeCandidateValidator.matches(metadata("Song", "Artist"),
+                candidate("Artist 'Song' " + version, "Artist"))).isFalse();
+        assertThat(YoutubeCandidateValidator.matches(metadata(selectedVersionTitle, "Artist"),
+                candidate(selectedVersionTitle + " " + version, "Artist"))).isTrue();
+    }
+
+    @ParameterizedTest
+    @MethodSource("suffixCases")
+    void 제목_이후_검사의_경계와_제목_보호_및_정책_한계를_검증한다(
+            String selectedTitle, String videoTitle, boolean expected
+    ) {
+        // given
+        TrackMetadataCache metadata = metadata(selectedTitle, "Artist");
+        // when
+        boolean result = YoutubeCandidateValidator.matches(metadata, candidate(videoTitle, "Artist"));
+        // then
+        assertThat(result).isEqualTo(expected);
+    }
+
+    static Stream<Arguments> suffixCases() {
+        return Stream.of(
+                Arguments.of("Song", "SongLive", true),
+                Arguments.of("Song", "Song Live2", true),
+                Arguments.of("Song", "Song Live한", true),
+                Arguments.of("Song", "Song 한Live", true),
+                Arguments.of("Song", "Song Live\u0301", true),
+                Arguments.of("Song", "Song Alive Livestream", true),
+                Arguments.of("Song", "Live Clip Song", true),
+                Arguments.of("Song", "[Live Clip] Song", false),
+                Arguments.of("Song", "Song Live Clip Song", false),
+                Arguments.of("Live Forever", "Live Forever / Live Forever", true),
+                Arguments.of("Live Forever", "Live Forever / Live Forever Live Clip", false),
+                Arguments.of("Cover", "Cover Cover", true),
+                Arguments.of("Song (Live)", "Song (Live) Live Clip", true),
+                Arguments.of("Song (Live Clip)", "Song (Live Clip) Live", true),
+                Arguments.of("Song (INST)", "Song (INST) Instrumental", true),
+                Arguments.of("Song (Live Remix)", "Song (Live Remix) Live Clip Remix", true),
+                Arguments.of("Song (Live)", "Song (Live) Cover", false),
+                Arguments.of("Song (Live)", "Song Live", false),
+                Arguments.of("Song Live", "Song Live", true),
+                Arguments.of("Song Live", "Song Live Live Clip", false),
+                Arguments.of("Song", "Song Full Album Playlist", true),
+                Arguments.of("Song", "Song Classroom Instruments Acoustic Slowed Karaoke", true),
+                Arguments.of("Song", "Song Album Cover", false),
+                Arguments.of("Song", "Song Live Premiere", false),
+                Arguments.of("Song", "Song featuring Live", false),
+                Arguments.of("Song", "ＳＯＮＧ &#39; LIVE\u00a0CLIP", false)
+        );
+    }
+
+    @Test
+    void 곡_제목_뒤_괄호_밖의_Live_Clip_오매핑_사례를_제외한다() {
+        // given
+        TrackMetadataCache metadata = metadata("Love wins all", "IU");
+        YoutubeSearchResponse.Item candidate = candidate(
+                "IU 'Love wins all' Live Clip (2024 IU HEREH WORLD TOUR CONCERT IN SEOUL)", "IU"
+        );
+        // when, then
+        assertThat(YoutubeCandidateValidator.matches(metadata, candidate)).isFalse();
     }
 
     private static YoutubeSearchResponse.Item candidate(String title, String channel) {
