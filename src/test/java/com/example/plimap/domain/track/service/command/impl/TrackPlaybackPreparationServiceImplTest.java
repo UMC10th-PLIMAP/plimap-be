@@ -27,6 +27,9 @@ import com.example.plimap.global.external.youtube.dto.YoutubeSearchResponse;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.data.redis.RedisConnectionFailureException;
 
 class TrackPlaybackPreparationServiceImplTest {
@@ -155,7 +158,7 @@ class TrackPlaybackPreparationServiceImplTest {
         givenMetadata();
         when(youtubeSearchClient.search(QUERY, 5)).thenReturn(new YoutubeSearchResponse(List.of(
                 new YoutubeSearchResponse.Item(new YoutubeSearchResponse.Id(" ")),
-                new YoutubeSearchResponse.Item(new YoutubeSearchResponse.Id("abcdefghijk"))
+                candidate("abcdefghijk", QUERY)
         )));
 
         TrackResponse.PlaybackPreparationResult result = service.prepare(request());
@@ -257,7 +260,160 @@ class TrackPlaybackPreparationServiceImplTest {
 
     private YoutubeSearchResponse youtubeResponse(String videoId) {
         return new YoutubeSearchResponse(List.of(
-                new YoutubeSearchResponse.Item(new YoutubeSearchResponse.Id(videoId))
+                candidate(videoId, QUERY)
         ));
+    }
+
+    private YoutubeSearchResponse.Item candidate(String videoId, String title) {
+        return new YoutubeSearchResponse.Item(
+                new YoutubeSearchResponse.Id(videoId),
+                new YoutubeSearchResponse.Snippet(title, "채널")
+        );
+    }
+
+    private void givenGenre(String genre) {
+        TrackMetadataCache original = metadata();
+        when(trackMetadataCacheRepository.findByItunesTrackId(ITUNES_TRACK_ID))
+                .thenReturn(Optional.of(new TrackMetadataCache(
+                        original.itunesTrackId(), original.title(), original.artistName(),
+                        original.albumTitle(), original.albumImageUrl(), original.previewUrl(),
+                        original.durationMs(), genre
+                )));
+    }
+
+    @Test
+    void 부적합한_첫_후보를_건너뛰고_첫_통과_후보를_추가_검색_없이_선택한다() {
+        // given
+        givenGenre("Pop");
+        when(youtubeSearchClient.search(QUERY, 5)).thenReturn(new YoutubeSearchResponse(List.of(
+                candidate("wrong", "다른 아티스트 밤편지"),
+                candidate("abcdefghijk", QUERY),
+                candidate("later", QUERY)
+        )));
+        // when
+        TrackResponse.PlaybackPreparationResult result = service.prepare(request());
+        // then
+        assertThat(result.youtubeVideoId()).isEqualTo("abcdefghijk");
+        verify(youtubeSearchClient).search(QUERY, 5);
+        verifyNoMoreInteractions(youtubeSearchClient);
+        verify(selectedTrackCacheRepository).save(selectedTrack());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void 빈_결과나_모든_후보_탈락시_장르로_한번만_재검색한다(boolean empty) {
+        // given
+        givenGenre("Pop");
+        when(youtubeSearchClient.search(QUERY, 5)).thenReturn(new YoutubeSearchResponse(
+                empty ? List.of() : List.of(candidate("wrong", QUERY + " (Cover)"))
+        ));
+        when(youtubeSearchClient.search(QUERY + " Pop", 5)).thenReturn(new YoutubeSearchResponse(List.of(
+                candidate("wrong-again", QUERY + " [Playlist]"),
+                candidate("abcdefghijk", QUERY),
+                candidate("later", QUERY)
+        )));
+        // when
+        TrackResponse.PlaybackPreparationResult result = service.prepare(request());
+        // then
+        assertThat(result.youtubeVideoId()).isEqualTo("abcdefghijk");
+        verify(youtubeSearchClient).search(QUERY, 5);
+        verify(youtubeSearchClient).search(QUERY + " Pop", 5);
+        verifyNoMoreInteractions(youtubeSearchClient);
+        verify(selectedTrackCacheRepository).save(selectedTrack());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void 이차_검색도_빈_결과나_부적합_후보이면_캐시_변경_없이_매핑에_실패한다(boolean empty) {
+        // given
+        givenGenre("Pop");
+        when(youtubeSearchClient.search(QUERY, 5)).thenReturn(new YoutubeSearchResponse(List.of()));
+        when(youtubeSearchClient.search(QUERY + " Pop", 5)).thenReturn(new YoutubeSearchResponse(
+                empty ? List.of() : List.of(candidate("wrong", QUERY + " (Remix)"))
+        ));
+        // when, then
+        assertTrackError(() -> service.prepare(request()), TrackErrorCode.YOUTUBE_MATCH_NOT_FOUND);
+        verify(youtubeSearchClient).search(QUERY, 5);
+        verify(youtubeSearchClient).search(QUERY + " Pop", 5);
+        verifyNoMoreInteractions(youtubeSearchClient);
+        verifyUnchangedCaches();
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {" ", "\t"})
+    void 장르가_없으면_부적합_결과에_중복_검색하지_않는다(String genre) {
+        // given
+        givenGenre(genre);
+        when(youtubeSearchClient.search(QUERY, 5))
+                .thenReturn(new YoutubeSearchResponse(List.of(candidate("wrong", "다른 곡"))));
+        // when, then
+        assertTrackError(() -> service.prepare(request()), TrackErrorCode.YOUTUBE_MATCH_NOT_FOUND);
+        verify(youtubeSearchClient).search(QUERY, 5);
+        verifyNoMoreInteractions(youtubeSearchClient);
+        verifyUnchangedCaches();
+    }
+
+    @Test
+    void 이차_검색_API_실패를_후보_불일치와_구분한다() {
+        // given
+        givenGenre("Pop");
+        when(youtubeSearchClient.search(QUERY, 5)).thenReturn(new YoutubeSearchResponse(List.of()));
+        when(youtubeSearchClient.search(QUERY + " Pop", 5))
+                .thenThrow(new YoutubeClientException("request failed"));
+        // when, then
+        assertTrackError(() -> service.prepare(request()), TrackErrorCode.YOUTUBE_EXTERNAL_API_ERROR);
+        verify(youtubeSearchClient).search(QUERY, 5);
+        verify(youtubeSearchClient).search(QUERY + " Pop", 5);
+        verifyNoMoreInteractions(youtubeSearchClient);
+        verifyUnchangedCaches();
+    }
+
+    private void verifyUnchangedCaches() {
+        verify(selectedTrackCacheRepository).findByItunesTrackId(ITUNES_TRACK_ID);
+        verify(playbackFailureCacheRepository).findByItunesTrackId(ITUNES_TRACK_ID);
+        verify(trackMetadataCacheRepository).findByItunesTrackId(ITUNES_TRACK_ID);
+        verifyNoMoreInteractions(selectedTrackCacheRepository, playbackFailureCacheRepository,
+                trackMetadataCacheRepository);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Live", "Live Clip"})
+    void 라이브_후보를_제외하고_다음_정상_후보를_추가_검색_없이_선택한다(String version) {
+        // given
+        givenGenre("Pop");
+        when(youtubeSearchClient.search(QUERY, 5)).thenReturn(new YoutubeSearchResponse(List.of(
+                candidate("live-video", QUERY + " [" + version + "]"),
+                candidate("abcdefghijk", QUERY)
+        )));
+        // when
+        TrackResponse.PlaybackPreparationResult result = service.prepare(request());
+        // then
+        assertThat(result.youtubeVideoId()).isEqualTo("abcdefghijk");
+        verify(youtubeSearchClient).search(QUERY, 5);
+        verifyNoMoreInteractions(youtubeSearchClient);
+        verify(selectedTrackCacheRepository).save(selectedTrack());
+    }
+
+    @Test
+    void 모든_후보가_라이브이면_장르_Fallback에서도_라이브를_제외한다() {
+        // given
+        givenGenre("Pop");
+        when(youtubeSearchClient.search(QUERY, 5)).thenReturn(new YoutubeSearchResponse(List.of(
+                candidate("live-video", QUERY + " (Live)"),
+                candidate("live-clip", QUERY + " - Live Clip")
+        )));
+        when(youtubeSearchClient.search(QUERY + " Pop", 5)).thenReturn(new YoutubeSearchResponse(List.of(
+                candidate("another-live", QUERY + " [Live Clip]"),
+                candidate("abcdefghijk", QUERY)
+        )));
+        // when
+        TrackResponse.PlaybackPreparationResult result = service.prepare(request());
+        // then
+        assertThat(result.youtubeVideoId()).isEqualTo("abcdefghijk");
+        verify(youtubeSearchClient).search(QUERY, 5);
+        verify(youtubeSearchClient).search(QUERY + " Pop", 5);
+        verifyNoMoreInteractions(youtubeSearchClient);
+        verify(selectedTrackCacheRepository).save(selectedTrack());
     }
 }

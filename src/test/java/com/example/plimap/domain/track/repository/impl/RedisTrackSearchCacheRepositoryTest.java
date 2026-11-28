@@ -23,6 +23,22 @@ import tools.jackson.core.JacksonException;
 
 class RedisTrackSearchCacheRepositoryTest {
 
+    @Test
+    void 기존_검색_JSON에_장르가_없어도_읽는다() {
+        // given
+        String json = """
+                {"tracks":[{"itunesTrackId":123,"title":"Song","artistName":"Artist",
+                 "albumTitle":"Album","albumImageUrl":null,"previewUrl":null,"durationMs":1000}]}
+                """;
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get(org.mockito.ArgumentMatchers.anyString())).thenReturn(json);
+        // when
+        TrackSearchCache result = repository.find("song", 20).orElseThrow();
+        // then
+        assertThat(result.tracks().getFirst().title()).isEqualTo("Song");
+        assertThat(result.tracks().getFirst().primaryGenreName()).isNull();
+    }
+
     private static final String KEY = "track:search:v3:taylor swift:20";
 
     private final StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);

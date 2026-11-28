@@ -44,10 +44,10 @@ class YoutubeSearchClientImplTest {
     }
 
     @Test
-    void Official_Audio_검색에_한국_지역과_임베드_가능_조건을_적용한다() {
+    void 접미사_없이_한국_지역과_임베드_가능_조건으로_한번_검색한다() {
         server.expect(once(), request -> assertSearchRequest(
                         request.getURI(),
-                        "아이유 밤편지 Official Audio",
+                        "아이유 밤편지",
                         5
                 ))
                 .andExpect(method(HttpMethod.GET))
@@ -58,37 +58,17 @@ class YoutubeSearchClientImplTest {
         assertThat(response.items())
                 .extracting(item -> item.id() == null ? null : item.id().videoId())
                 .containsExactly("first-video", "second-video");
+        assertThat(response.items().getFirst().snippet())
+                .isEqualTo(new YoutubeSearchResponse.Snippet("Song &amp; Song", "Artist"));
         server.verify();
     }
 
     @Test
-    void Official_Audio_결과가_없을_때만_기본_검색어로_fallback한다() {
-        server.expect(once(), request -> assertSearchRequest(
-                        request.getURI(),
-                        "아이유 밤편지 Official Audio",
-                        5
-                ))
-                .andRespond(withSuccess("{\"items\":[]}", MediaType.APPLICATION_JSON));
-        server.expect(once(), request -> assertSearchRequest(
-                        request.getURI(),
-                        "아이유 밤편지",
-                        5
-                ))
-                .andRespond(withSuccess(multipleResults(), MediaType.APPLICATION_JSON));
-
-        YoutubeSearchResponse response = client.search("아이유 밤편지", 5);
-
-        assertThat(response.items()).hasSize(2);
-        server.verify();
-    }
-
-    @Test
-    void 두_검색_결과가_모두_비어_있으면_빈_목록을_반환한다() {
+    void 빈_검색_결과에도_클라이언트가_추가_호출하지_않는다() {
+        // given
         server.expect(once(), request -> { })
                 .andRespond(withSuccess("{\"items\":[]}", MediaType.APPLICATION_JSON));
-        server.expect(once(), request -> { })
-                .andRespond(withSuccess("{\"items\":[]}", MediaType.APPLICATION_JSON));
-
+        // when, then
         assertThat(client.search("query", 5).items()).isEmpty();
         server.verify();
     }
@@ -158,7 +138,7 @@ class YoutubeSearchClientImplTest {
         return """
                 {
                   "items": [
-                    {"id": {"videoId": "first-video"}},
+                    {"id": {"videoId": "first-video"}, "snippet": {"title": "Song &amp; Song", "channelTitle": "Artist", "description": "ignored"}},
                     {"id": {"videoId": "second-video"}}
                   ]
                 }

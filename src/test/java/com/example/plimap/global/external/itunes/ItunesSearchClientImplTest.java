@@ -60,7 +60,8 @@ class ItunesSearchClientImplTest {
                 "Palette",
                 "https://image.example/cover.jpg",
                 "https://audio.example/preview.m4a",
-                253000
+                253000,
+                "Pop"
         ));
         server.verify();
     }
@@ -111,7 +112,8 @@ class ItunesSearchClientImplTest {
                       "collectionName": "Palette",
                       "artworkUrl100": "https://image.example/cover.jpg",
                       "previewUrl": "https://audio.example/preview.m4a",
-                      "trackTimeMillis": 253000
+                      "trackTimeMillis": 253000,
+                      "primaryGenreName": "Pop"
                     }
                   ]
                 }
